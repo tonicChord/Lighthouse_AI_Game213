@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Harbor: Dark Waters</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #010408; /* Extremely dark nighttime ocean */
+            color: white;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px;
+            z-index: 10;
+        }
+
+        .hud-panel {
+            background: rgba(5, 10, 15, 0.85);
+            border: 1px solid rgba(255,255,255,0.05);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            padding: 16px 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        /* Upgraded Battery Bar */
+        .battery-container {
+            width: 500px;
+            height: 28px;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #2d3748;
+            border-radius: 14px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+        }
+        
+        #battery-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ed8936, #f6e05e, #fff);
+            transform-origin: left;
+            transition: transform 0.1s linear, background-color 0.3s;
+            box-shadow: 0 0 15px rgba(246, 224, 94, 0.5);
+        }
+
+        .battery-warning {
+            background: linear-gradient(90deg, #9b2c2c, #e53e3e) !important;
+            box-shadow: 0 0 15px rgba(229, 62, 62, 0.5) !important;
+        }
+
+        /* Lightning Flash Overlay */
+        #lightning-flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #e2f1ff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: auto;
+            z-index: 20;
+            max-width: 600px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="lightning-flash"></div>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div class="flex justify-between items-start">
+            <div class="hud-panel flex flex-col gap-2">
+                <div class="text-3xl font-bold tracking-wider text-teal-500">SCORE: <span id="score" class="text-white">0</span></div>
+                <div class="text-sm text-gray-400">Eco-Rating Multiplier: <span id="eco-rating" class="font-bold text-yellow-400">1.0x</span></div>
+            </div>
+            
+            <div class="hud-panel flex flex-col items-end gap-2">
+                <div class="text-xl font-bold text-red-500 tracking-wide">CANNON: <span id="cannon-status" class="text-white">READY</span></div>
+                <div class="text-xs text-gray-500">Right-Click to Fire (AoE)</div>
+            </div>
+        </div>
+
+        <div class="flex justify-center mb-8">
+            <div class="hud-panel flex flex-col items-center gap-2">
+                <div class="text-sm font-bold uppercase tracking-widest text-gray-400">Generator Battery (400%)</div>
+                <div class="battery-container">
+                    <div id="battery-fill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="instructions" class="hud-panel cursor-pointer">
+        <h1 class="text-3xl font-bold mb-4 text-white uppercase tracking-widest border-b border-gray-700 pb-4">Dark Waters</h1>
+        <ul class="text-left text-gray-300 space-y-3 mb-6 text-sm">
+            <li><strong class="text-yellow-400">Left-Click (Hold):</strong> Illuminate the darkness. <strong class="text-yellow-400">Scroll Wheel</strong> adjusts beam size.</li>
+            <li><strong class="text-teal-400">Strict Rule of Light:</strong> Cargo ships <span class="underline">only sail forward</span> when illuminated.</li>
+            <li><strong class="text-red-400">Rule of Darkness:</strong> Unlit ships are immediately blown sideways by the storm into deadly rocks!</li>
+            <li><strong class="text-blue-300">Lightning Flashes:</strong> Sporadic bursts of lightning will reveal the map. Use them to locate ships without spending battery.</li>
+            <li><strong class="text-red-500">Combat:</strong> Right-click fires a Cannon at Pirates. Shine your light on Krakens to repel them.</li>
+            <li><strong class="text-teal-500">Scoring:</strong> Guide ships to the massive Safe Harbor (bottom right). Smallest light usage = highest Eco-multiplier.</li>
+        </ul>
+        <button id="start-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-8 rounded shadow-lg shadow-teal-500/30 transition w-full uppercase tracking-widest">Ignite the Beacon</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const flashOverlay = document.getElementById('lightning-flash');
+        
+        // UI Nodes
+        const uiScore = document.getElementById('score');
+        const uiEco = document.getElementById('eco-rating');
+        const uiCannon = document.getElementById('cannon-status');
+        const uiBatteryFill = document.getElementById('battery-fill');
+        const instructions = document.getElementById('instructions');
+        const startBtn = document.getElementById('start-btn');
+
+        // Isometric World Setup
+        const WORLD_SIZE = 1600; // Expanded world
+        const ISO_SCALE = 1.0;
+        let cameraX = WORLD_SIZE / 2;
+        let cameraY = WORLD_SIZE / 2;
+        let screenCenterX = 0;
+        let screenCenterY = 0;
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            screenCenterX = canvas.width / 2;
+            screenCenterY = canvas.height / 2 + 50; 
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Isometric Math Projections
+        function worldToScreen(wx, wy) {
+            const dx = (wx - cameraX) * ISO_SCALE;
+            const dy = (wy - cameraY) * ISO_SCALE;
+            return {
+                x: screenCenterX + (dx - dy),
+                y: screenCenterY + (dx + dy) * 0.5
+            };
+        }
+
+        function screenToWorld(sx, sy) {
+            const dxScreen = sx - screenCenterX;
+            const dyScreen = (sy - screenCenterY) * 2;
+            return {
+                x: cameraX + (dxScreen + dyScreen) / (2 * ISO_SCALE),
+                y: cameraY + (dyScreen - dxScreen) / (2 * ISO_SCALE)
+            };
+        }
+
+        let gameRunning = false;
+        let lastTime = 0;
+        let globalTime = 0;
+        
+        let score = 0;
+        const MAX_BATTERY = 400; // Drastically increased
+        let battery = MAX_BATTERY;
+        let cannonCooldown = 0;
+        
+        // Atmosphere & Physics
+        const WIND_VECTOR = { x: 30, y: 15 }; // Drifts "down-right" across the screen
+        const HARBOR_AREA = { x: 900, y: 900, width: 700, height: 700 }; // Massively expanded harbor
+        const LIGHTHOUSE_POS = { x: 1550, y: 1550 }; // Placed at edge of harbor
+
+        // Lightning mechanic
+        let lightningTimer = 5.0; 
+        let lightningAlpha = 0;
+
+        // Mouse & Light Configuration
+        const mouseScreen = { x: 0, y: 0, active: false };
+        let mouseWorld = { x: 0, y: 0 };
+        const light = {
+            radius: 35, // Decreased initial diameter
+            minRadius: 15,
+            maxRadius: 150, 
+            baseDrainRate: 4, 
+            regenRate: 20
+        };
+
+        // Entity Storage
+        let ships = [];
+        let pirates = [];
+        let krakens = [];
+        let hazards = [];
+        let particles = [];
+        let blasts = [];
+
+        let spawnTimers = { ship: 2, pirate: 8, kraken: 12 };
+
+        canvas.addEventListener('mousemove', (e) => {
+            mouseScreen.x = e.clientX;
+            mouseScreen.y = e.clientY;
+            mouseWorld = screenToWorld(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!gameRunning) return;
+            if (e.button === 0) mouseScreen.active = true;
+            else if (e.button === 2 && cannonCooldown <= 0) fireCannon(mouseWorld.x, mouseWorld.y);
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (e.button === 0) mouseScreen.active = false;
+        });
+
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        canvas.addEventListener('wheel', (e) => {
+            if (!gameRunning) return;
+            light.radius -= e.deltaY * 0.08;
+            light.radius = Math.max(light.minRadius, Math.min(light.maxRadius, light.radius));
+        });
+
+        startBtn.addEventListener('click', () => {
+            instructions.style.display = 'none';
+            initGame();
+        });
+
+        class CargoShip {
+            constructor() {
+                // Spawn on far left or top edges
+                if (Math.random() > 0.5) {
+                    this.x = Math.random() * 800 - 200;
+                    this.y = -100;
+                } else {
+                    this.x = -100;
+                    this.y = Math.random() * 800 - 200;
+                }
+                this.speed = 45; 
+                this.batterySpent = 0;
+                this.isDead = false;
+                this.width = 14; 
+                this.length = 28;
+                this.height = 12;
+            }
+
+            update(dt, isLit, drainRate) {
+                if (isLit) {
+                    // Rule of Light: Move to Harbor Center
+                    const tx = HARBOR_AREA.x + HARBOR_AREA.width/2;
+                    const ty = HARBOR_AREA.y + HARBOR_AREA.height/2;
+                    const dist = Math.hypot(tx - this.x, ty - this.y);
+                    if (dist > 0) {
+                        this.x += ((tx - this.x) / dist) * this.speed * dt;
+                        this.y += ((ty - this.y) / dist) * this.speed * dt;
+                    }
+                    this.batterySpent += drainRate * dt;
+                } else {
+                    // Rule of Darkness: Immediate Drift
+                    this.x += WIND_VECTOR.x * dt;
+                    this.y += WIND_VECTOR.y * dt;
+                }
+            }
+            
+            draw(ctx, screenPos) {
+                // Base Hull
+                drawIsoBox(ctx, screenPos.x, screenPos.y, this.width, this.length, this.height, '#4a5568', '#2d3748', '#1a202c');
+                // Cargo Containers
+                drawIsoBox(ctx, screenPos.x + 2, screenPos.y - this.height, 10, 10, 8, '#3182ce', '#2b6cb0', '#2c5282');
+                drawIsoBox(ctx, screenPos.x - 2, screenPos.y - this.height - 4, 10, 10, 8, '#e53e3e', '#c53030', '#9b2c2c');
+            }
+        }
+
+        class Pirate {
+            constructor() {
+                this.x = Math.random() > 0.5 ? -100 : 1600;
+                this.y = Math.random() * 1000;
+                this.speed = 60; 
+                this.isDead = false;
+            }
+
+            update(dt) {
+                let nearest = Infinity, target = null;
+                for (let s of ships) {
+                    let d = Math.hypot(s.x - this.x, s.y - this.y);
+                    if (d < nearest) { nearest = d; target = s; }
+                }
+
+                if (target) {
+                    let d = Math.hypot(target.x - this.x, target.y - this.y);
+                    this.x += ((target.x - this.x) / d) * this.speed * dt;
+                    this.y += ((target.y - this.y) / d) * this.speed * dt;
+
+                    if (d < 20) {
+                        target.isDead = true;
+                        this.isDead = true;
+                        createExplosion(target.x, target.y, '#e53e3e');
+                    }
+                } else {
+                    this.x += WIND_VECTOR.x * dt;
+                    this.y += WIND_VECTOR.y * dt;
+                }
+            }
+
+            draw(ctx, screenPos) {
+                drawIsoBox(ctx, screenPos.x, screenPos.y, 10, 24, 8, '#1a202c', '#000000', '#171923');
+                // Aggressive Red Sails
+                ctx.fillStyle = '#9b2c2c';
+                ctx.beginPath();
+                ctx.moveTo(screenPos.x, screenPos.y - 8);
+                ctx.lineTo(screenPos.x - 10, screenPos.y - 35);
+                ctx.lineTo(screenPos.x + 15, screenPos.y - 15);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        class Kraken {
+            constructor() {
+                this.x = Math.random() * 1400;
+                this.y = Math.random() * 1400;
+                this.speed = 30;
+                this.isDead = false;
+                this.target = { x: Math.random() * 1400, y: Math.random() * 1400 };
+                this.timer = 0;
+            }
+
+            update(dt, isLit, lightCenter) {
+                if (isLit) {
+                    // Repelled rapidly by light
+                    let d = Math.hypot(this.x - lightCenter.x, this.y - lightCenter.y);
+                    if (d > 0) {
+                        this.x += ((this.x - lightCenter.x) / d) * (this.speed * 4) * dt;
+                        this.y += ((this.y - lightCenter.y) / d) * (this.speed * 4) * dt;
+                    }
+                } else {
+                    this.timer -= dt;
+                    if (this.timer <= 0) {
+                        this.target = { x: Math.random() * 1400, y: Math.random() * 1400 };
+                        this.timer = 5;
+                    }
+                    let d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+                    if (d > 5) {
+                        this.x += ((this.target.x - this.x) / d) * this.speed * dt;
+                        this.y += ((this.target.y - this.y) / d) * this.speed * dt;
+                    }
+                }
+
+                // Eat nearby ships
+                ships.forEach(s => {
+                    if (Math.hypot(s.x - this.x, s.y - this.y) < 30) {
+                        s.isDead = true;
+                        createExplosion(s.x, s.y, '#6b46c1');
+                    }
+                });
+
+                if (this.x < -300 || this.x > 1800 || this.y < -300 || this.y > 1800) this.isDead = true;
+            }
+
+            draw(ctx, screenPos) {
+                const pulse = Math.sin(globalTime * 4) * 3;
+                
+                // Head
+                ctx.fillStyle = '#553c9a';
+                ctx.beginPath();
+                ctx.ellipse(screenPos.x, screenPos.y - 10 - pulse, 18 + pulse, 24 + pulse, 0, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Sinister Eyes
+                ctx.fillStyle = '#68d391'; // Greenish
+                ctx.fillRect(screenPos.x - 6, screenPos.y - 18 - pulse, 4, 3);
+                ctx.fillRect(screenPos.x + 3, screenPos.y - 18 - pulse, 4, 3);
+
+                // Tentacles (Greenish Purple)
+                ctx.strokeStyle = '#44337a';
+                ctx.lineWidth = 5;
+                for(let i=0; i<5; i++) {
+                    let offset = Math.sin(globalTime * 6 + i) * 12;
+                    ctx.beginPath();
+                    ctx.moveTo(screenPos.x - 15 + i*7, screenPos.y - 2);
+                    ctx.quadraticCurveTo(screenPos.x - 20 + i*10 + offset, screenPos.y + 15, screenPos.x - 12 + i*8 + offset, screenPos.y + 20);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawIsoBox(ctx, sx, sy, w, l, h, cTop, cLeft, cRight) {
+            const dxW = w, dyW = w * 0.5;
+            const dxL = -l, dyL = l * 0.5;
+            
+            // Left Face
+            ctx.fillStyle = cLeft;
+            ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + dxL, sy + dyL); ctx.lineTo(sx + dxL, sy + dyL - h); ctx.lineTo(sx, sy - h); ctx.closePath(); ctx.fill();
+            // Right Face
+            ctx.fillStyle = cRight;
+            ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + dxW, sy + dyW); ctx.lineTo(sx + dxW, sy + dyW - h); ctx.lineTo(sx, sy - h); ctx.closePath(); ctx.fill();
+            // Top Face
+            ctx.fillStyle = cTop;
+            ctx.beginPath(); ctx.moveTo(sx, sy - h); ctx.lineTo(sx + dxW, sy + dyW - h); ctx.lineTo(sx + dxW + dxL, sy + dyW + dyL - h); ctx.lineTo(sx + dxL, sy + dyL - h); ctx.closePath(); ctx.fill();
+        }
+
+        function generateHazards() {
+            hazards = [];
+            for (let i = 0; i < 12; i++) {
+                let wx = Math.random() * 1000 + 200;
+                let wy = Math.random() * 1000 + 200;
+                // Keep out of harbor
+                if (wx > HARBOR_AREA.x - 100 && wy > HARBOR_AREA.y - 100) continue;
+                hazards.push({ x: wx, y: wy, radius: 45, type: Math.random() > 0.5 ? 'rock' : 'whirlpool' });
+            }
+        }
+
+        function fireCannon(wx, wy) {
+            cannonCooldown = 3.0;
+            blasts.push({ x: wx, y: wy, radius: 0, maxRadius: 100, life: 1.0 });
+            pirates.forEach(p => {
+                if (Math.hypot(p.x - wx, p.y - wy) <= 100) {
+                    p.isDead = true;
+                    createExplosion(p.x, p.y, '#e53e3e', 20);
+                }
+            });
+            createExplosion(wx, wy, '#ed8936', 30, true);
+        }
+
+        function createExplosion(wx, wy, color, count=15, isCannon=false) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: wx, y: wy, z: isCannon ? 0 : 10,
+                    vx: (Math.random() - 0.5) * 150,
+                    vy: (Math.random() - 0.5) * 150,
+                    vz: Math.random() * 150 + 50,
+                    life: 1.2,
+                    color: color
+                });
+            }
+        }
+
+        function initGame() {
+            score = 0;
+            battery = MAX_BATTERY;
+            cannonCooldown = 0;
+            lightningAlpha = 0;
+            lightningTimer = 3.0;
+            ships = []; pirates = []; krakens = []; particles = []; blasts = [];
+            generateHazards();
+            
+            gameRunning = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+            updateUI();
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // Cap dt
+            lastTime = timestamp;
+            globalTime += dt;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(dt) {
+            // Lightning System Update
+            lightningTimer -= dt;
+            if (lightningTimer <= 0) {
+                lightningAlpha = 1.0; // Trigger flash
+                lightningTimer = 8 + Math.random() * 12; // 8 to 20 seconds between flashes
+                flashOverlay.style.opacity = '1';
+                flashOverlay.style.background = Math.random() > 0.5 ? '#ffffff' : '#bee3f8';
+            }
+            if (lightningAlpha > 0) {
+                lightningAlpha -= dt * 2.0; // Fast fade
+                if(lightningAlpha < 0) lightningAlpha = 0;
+                flashOverlay.style.opacity = lightningAlpha.toString();
+            }
+
+            // Battery Physics
+            let currentDrainRate = 0;
+            let isLightActuallyOn = false;
+
+            if (mouseScreen.active && battery > 0) {
+                const factor = light.radius / light.minRadius; 
+                currentDrainRate = light.baseDrainRate * (factor * factor * 0.4); 
+                battery -= currentDrainRate * dt;
+                isLightActuallyOn = true;
+                if (battery <= 0) { battery = 0; isLightActuallyOn = false; }
+            } else {
+                battery += light.regenRate * dt;
+                if (battery > MAX_BATTERY) battery = MAX_BATTERY;
+            }
+
+            if (cannonCooldown > 0) cannonCooldown -= dt;
+
+            // Spawners
+            spawnTimers.ship -= dt;
+            if (spawnTimers.ship <= 0) { ships.push(new CargoShip()); spawnTimers.ship = 3 + Math.random() * 3; }
+            
+            spawnTimers.pirate -= dt;
+            if (spawnTimers.pirate <= 0) { pirates.push(new Pirate()); spawnTimers.pirate = 8 + Math.random() * 5; }
+
+            spawnTimers.kraken -= dt;
+            if (spawnTimers.kraken <= 0) { krakens.push(new Kraken()); spawnTimers.kraken = 20 + Math.random() * 10; }
+
+            for (let i = ships.length - 1; i >= 0; i--) {
+                let s = ships[i];
+                let isLit = isLightActuallyOn && Math.hypot(s.x - mouseWorld.x, s.y - mouseWorld.y) <= light.radius;
+                
+                s.update(dt, isLit, currentDrainRate);
+
+                // Hazard Collision
+                for (let h of hazards) {
+                    if (Math.hypot(s.x - h.x, s.y - h.y) < h.radius - 5) {
+                        s.isDead = true;
+                        createExplosion(s.x, s.y, '#718096');
+                        break;
+                    }
+                }
+
+                // Harbor Success (Massive Area Check)
+                if (s.x > HARBOR_AREA.x && s.x < HARBOR_AREA.x + HARBOR_AREA.width && 
+                    s.y > HARBOR_AREA.y && s.y < HARBOR_AREA.y + HARBOR_AREA.height) {
+                    
+                    let ecoMultiplier = Math.max(1.0, Math.min(25.0, 100 / (s.batterySpent + 1)));
+                    score += Math.round(150 * ecoMultiplier);
+                    
+                    uiEco.innerText = ecoMultiplier.toFixed(1) + 'x';
+                    uiEco.className = ecoMultiplier > 10 ? 'font-bold text-teal-300 text-xl transition-all drop-shadow-[0_0_10px_rgba(79,209,197,0.8)]' : 
+                                      ecoMultiplier > 4 ? 'font-bold text-yellow-400 transition-all' : 'font-bold text-gray-500';
+                    setTimeout(() => { uiEco.className = uiEco.className.replace('text-xl drop-shadow-[0_0_10px_rgba(79,209,197,0.8)]', ''); }, 300);
+
+                    s.isDead = true; 
+                    createExplosion(s.x, s.y, '#48bb78', 25);
+                }
+
+                if (s.isDead) ships.splice(i, 1);
+            }
+
+            for (let i = pirates.length - 1; i >= 0; i--) {
+                pirates[i].update(dt);
+                if (pirates[i].isDead) pirates.splice(i, 1);
+            }
+
+            for (let i = krakens.length - 1; i >= 0; i--) {
+                let isLit = isLightActuallyOn && Math.hypot(krakens[i].x - mouseWorld.x, krakens[i].y - mouseWorld.y) <= light.radius;
+                krakens[i].update(dt, isLit, mouseWorld);
+                if (krakens[i].isDead) krakens.splice(i, 1);
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+                p.vz -= 400 * dt; // Gravity
+                if (p.z < 0) { p.z = 0; p.vz = 0; p.vx *= 0.7; p.vy *= 0.7; }
+                p.life -= dt;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            for (let i = blasts.length - 1; i >= 0; i--) {
+                blasts[i].radius += (blasts[i].maxRadius - blasts[i].radius) * 12 * dt;
+                blasts[i].life -= dt * 1.5;
+                if (blasts[i].life <= 0) blasts.splice(i, 1);
+            }
+
+            updateUI();
+        }
+
+        function draw() {
+            // Dark Background
+            ctx.fillStyle = '#010408';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Very Faint Grid (barely visible in the dark)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+            ctx.beginPath();
+            for(let i=0; i<=WORLD_SIZE; i+=100) {
+                let p1 = worldToScreen(i, 0); let p2 = worldToScreen(i, WORLD_SIZE);
+                ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+                p1 = worldToScreen(0, i); p2 = worldToScreen(WORLD_SIZE, i);
+                ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+            }
+            ctx.stroke();
+
+            // Draw Massive Safe Harbor
+            let h1 = worldToScreen(HARBOR_AREA.x, HARBOR_AREA.y);
+            let h2 = worldToScreen(HARBOR_AREA.x + HARBOR_AREA.width, HARBOR_AREA.y);
+            let h3 = worldToScreen(HARBOR_AREA.x + HARBOR_AREA.width, HARBOR_AREA.y + HARBOR_AREA.height);
+            let h4 = worldToScreen(HARBOR_AREA.x, HARBOR_AREA.y + HARBOR_AREA.height);
+            
+            ctx.fillStyle = 'rgba(49, 151, 149, 0.08)'; // Dim ambient glow
+            ctx.beginPath();
+            ctx.moveTo(h1.x, h1.y); ctx.lineTo(h2.x, h2.y); ctx.lineTo(h3.x, h3.y); ctx.lineTo(h4.x, h4.y);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Pulsing Harbor Border
+            ctx.strokeStyle = `rgba(56, 178, 172, ${0.2 + Math.sin(globalTime * 2) * 0.1})`;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw Flat Hazards
+            hazards.forEach(h => {
+                let pos = worldToScreen(h.x, h.y);
+                if (h.type === 'whirlpool') {
+                    ctx.strokeStyle = 'rgba(11, 197, 234, 0.4)';
+                    ctx.lineWidth = 2;
+                    for(let i=0; i<3; i++) {
+                        let angle = globalTime * -4 + (i * Math.PI * 2 / 3);
+                        ctx.beginPath(); ctx.ellipse(pos.x, pos.y, h.radius, h.radius * 0.5, 0, angle, angle + Math.PI); ctx.stroke();
+                    }
+                } else {
+                    // Dark jagged rocks
+                    drawIsoBox(ctx, pos.x, pos.y, h.radius*0.7, h.radius*0.7, h.radius*0.4, '#1a202c', '#171923', '#000000');
+                    drawIsoBox(ctx, pos.x-10, pos.y-5, h.radius*0.4, h.radius*0.4, h.radius*0.6, '#2d3748', '#1a202c', '#000000');
+                }
+            });
+
+            // Cannon Blasts
+            blasts.forEach(b => {
+                let pos = worldToScreen(b.x, b.y);
+                ctx.fillStyle = `rgba(221, 107, 32, ${b.life * 0.6})`;
+                ctx.strokeStyle = `rgba(254, 215, 215, ${b.life})`;
+                ctx.beginPath(); ctx.ellipse(pos.x, pos.y, b.radius, b.radius * 0.5, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            });
+
+            let renderList = [];
+            
+            renderList.push({ type: 'lighthouse', sortY: LIGHTHOUSE_POS.x + LIGHTHOUSE_POS.y, x: LIGHTHOUSE_POS.x, y: LIGHTHOUSE_POS.y });
+            ships.forEach(s => renderList.push({ type: 'ship', obj: s, sortY: s.x + s.y }));
+            pirates.forEach(p => renderList.push({ type: 'pirate', obj: p, sortY: p.x + p.y }));
+            krakens.forEach(k => renderList.push({ type: 'kraken', obj: k, sortY: k.x + k.y }));
+
+            // Depth Sort (x + y)
+            renderList.sort((a, b) => a.sortY - b.sortY);
+
+            renderList.forEach(item => {
+                let pos = worldToScreen(item.x || item.obj.x, item.y || item.obj.y);
+                
+                if (item.type === 'lighthouse') {
+                    const lhRadius = 25;
+                    ctx.fillStyle = '#742a2a'; // Very dark red base
+                    ctx.beginPath(); ctx.ellipse(pos.x, pos.y, lhRadius, lhRadius*0.5, 0, 0, Math.PI*2); ctx.fill();
+                    
+                    for(let i=0; i<5; i++) {
+                        let yOffset = i * 22;
+                        ctx.fillStyle = i % 2 === 0 ? '#4a5568' : '#9b2c2c'; // Darkened stripes
+                        ctx.beginPath();
+                        ctx.ellipse(pos.x, pos.y - yOffset, lhRadius - i*2, (lhRadius - i*2)*0.5, 0, 0, Math.PI, true);
+                        ctx.lineTo(pos.x - (lhRadius - (i+1)*2), pos.y - yOffset - 22);
+                        ctx.ellipse(pos.x, pos.y - yOffset - 22, lhRadius - (i+1)*2, (lhRadius - (i+1)*2)*0.5, 0, Math.PI, 0, false);
+                        ctx.closePath(); ctx.fill();
+                    }
+                    // Beacon glow
+                    ctx.fillStyle = '#faf089';
+                    ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 110, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+
+                } else {
+                    item.obj.draw(ctx, pos);
+                }
+            });
+
+            // Particles
+            particles.forEach(p => {
+                let pos = worldToScreen(p.x, p.y);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fillRect(pos.x, pos.y - p.z, 4, 4);
+            });
+            ctx.globalAlpha = 1.0;
+
+            let isLightActuallyOn = mouseScreen.active && battery > 0;
+            if (isLightActuallyOn) {
+                let lhPos = worldToScreen(LIGHTHOUSE_POS.x, LIGHTHOUSE_POS.y);
+                let lhTopY = lhPos.y - 110;
+                
+                let targetPos = worldToScreen(mouseWorld.x, mouseWorld.y);
+                
+                // Illumination Ellipse
+                ctx.globalCompositeOperation = 'screen';
+                ctx.fillStyle = 'rgba(255, 255, 180, 0.35)'; // Bright spot
+                ctx.beginPath();
+                ctx.ellipse(targetPos.x, targetPos.y, light.radius, light.radius * 0.5, 0, 0, Math.PI*2);
+                ctx.fill();
+
+                // Beam Path
+                ctx.fillStyle = 'rgba(255, 255, 200, 0.1)';
+                ctx.beginPath();
+                ctx.moveTo(lhPos.x, lhTopY);
+                ctx.lineTo(targetPos.x - light.radius, targetPos.y);
+                ctx.lineTo(targetPos.x + light.radius, targetPos.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+                
+                // Beam edges
+                ctx.strokeStyle = 'rgba(255, 255, 150, 0.2)';
+                ctx.beginPath();
+                ctx.moveTo(lhPos.x, lhTopY); ctx.lineTo(targetPos.x - light.radius, targetPos.y);
+                ctx.moveTo(lhPos.x, lhTopY); ctx.lineTo(targetPos.x + light.radius, targetPos.y);
+                ctx.stroke();
+
+            } else {
+                // Faint targeting reticle
+                let targetPos = worldToScreen(mouseWorld.x, mouseWorld.y);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.ellipse(targetPos.x, targetPos.y, light.radius, light.radius * 0.5, 0, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        function updateUI() {
+            uiScore.innerText = score;
+            
+            uiBatteryFill.style.transform = `scaleX(${battery / MAX_BATTERY})`;
+            if (battery < MAX_BATTERY * 0.25) uiBatteryFill.classList.add('battery-warning');
+            else uiBatteryFill.classList.remove('battery-warning');
+
+            if (cannonCooldown > 0) {
+                uiCannon.innerText = cannonCooldown.toFixed(1) + 's';
+                uiCannon.className = 'text-gray-600';
+            } else {
+                uiCannon.innerText = 'READY';
+                uiCannon.className = 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]';
+            }
+        }
+    </script>
+</body>
+</html>
