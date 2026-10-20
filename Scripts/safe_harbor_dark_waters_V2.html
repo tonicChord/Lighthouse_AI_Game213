@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Harbor: Dark Waters — Beacon of the Storm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #030710;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: none;
+        }
+
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 18px 24px;
+            z-index: 10;
+        }
+
+        /* Ultra-transparent HUD panels so gameplay is clearly visible underneath */
+        .hud-panel {
+            background: rgba(6, 12, 24, 0.22);
+            border: 1px solid rgba(120, 200, 255, 0.16);
+            border-radius: 12px;
+            padding: 12px 18px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            pointer-events: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .hud-modal {
+            background: rgba(6, 13, 26, 0.52);
+            border: 1px solid rgba(120, 210, 255, 0.28);
+            backdrop-filter: blur(6px);
+            border-radius: 16px;
+            padding: 24px 28px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
+            pointer-events: auto;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Transparent Battery Bar */
+        .battery-container {
+            width: min(460px, 76vw);
+            height: 18px;
+            background: rgba(4, 9, 18, 0.30);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #battery-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(237, 137, 54, 0.78), rgba(246, 224, 94, 0.85), rgba(255, 255, 255, 0.92));
+            transform-origin: left;
+            transition: transform 0.06s linear;
+            box-shadow: 0 0 12px rgba(246, 224, 94, 0.4);
+        }
+
+        .battery-warning {
+            background: linear-gradient(90deg, rgba(155, 44, 44, 0.85), rgba(245, 101, 101, 0.92)) !important;
+            box-shadow: 0 0 14px rgba(245, 101, 101, 0.6) !important;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            width: min(650px, 92vw);
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Transparent HUD Overlay -->
+    <div id="ui-layer">
+        <!-- Top Row -->
+        <div class="flex flex-wrap justify-between items-start gap-3">
+            <!-- Score & Eco Multiplier -->
+            <div class="hud-panel flex flex-col gap-1.5 min-w-[230px]">
+                <div class="flex items-baseline justify-between gap-4">
+                    <span class="text-xs font-bold uppercase tracking-widest text-cyan-300/80">Harbor Score</span>
+                    <span id="score" class="text-2xl font-extrabold text-white mono">0</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-300/85">
+                    <span>Last Eco-Rating:</span>
+                    <span id="eco-rating" class="font-bold text-amber-300 mono">READY (S+ 5.0x)</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-300/80 pt-1 border-t border-white/10">
+                    <span>Saved: <strong id="ships-saved" class="text-emerald-300 mono">0</strong></span>
+                    <span>Lost: <strong id="ships-lost" class="text-rose-400 mono">0</strong></span>
+                </div>
+            </div>
+
+            <!-- Center Wind & Storm Telemetry -->
+            <div class="hud-panel flex items-center gap-4 px-4 py-2">
+                <div class="flex flex-col">
+                    <span class="text-[10px] uppercase tracking-widest text-sky-300/75 font-semibold">Storm Crosswind</span>
+                    <div class="flex items-center gap-2">
+                        <span id="wind-speed" class="text-sm font-bold text-white mono">24 u/s</span>
+                        <span id="wind-dir-label" class="text-xs text-sky-200/80 mono">SE Gust</span>
+                    </div>
+                </div>
+                <div class="h-7 w-px bg-white/10"></div>
+                <div class="flex flex-col">
+                    <span class="text-[10px] uppercase tracking-widest text-amber-300/75 font-semibold">Light Beam</span>
+                    <span id="beam-radius-label" class="text-sm font-bold text-amber-200 mono">R: 42u</span>
+                </div>
+                <div class="h-7 w-px bg-white/10"></div>
+                <div class="flex flex-col">
+                    <span class="text-[10px] uppercase tracking-widest text-indigo-300/75 font-semibold">Next Lightning</span>
+                    <span id="lightning-status" class="text-sm font-bold text-indigo-200 mono">Active</span>
+                </div>
+            </div>
+
+            <!-- Right Cannon Status -->
+            <div class="hud-panel flex flex-col items-end gap-1 min-w-[220px]">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold uppercase tracking-widest text-rose-300/85">Defense Cannon</span>
+                    <span id="cannon-status" class="text-base font-extrabold text-emerald-300 mono">READY</span>
+                </div>
+                <div class="text-[11px] text-slate-300/80">Right-Click • Surgical AoE (<span class="text-amber-300 mono">30u</span>)</div>
+                <div class="text-[11px] text-rose-300/90 font-semibold">⚠ Friendly Fire Wrecks Cargo Ships!</div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Transparent Generator Battery -->
+        <div class="flex flex-col items-center gap-1.5 mb-1">
+            <div class="hud-panel flex flex-col items-center gap-1.5 py-2.5 px-5">
+                <div class="flex justify-between w-full text-[11px] font-semibold uppercase tracking-wider text-slate-200/85">
+                    <span>Lighthouse Generator Battery</span>
+                    <span id="battery-text" class="mono text-amber-300">200 / 200 (100%)</span>
+                </div>
+                <div class="battery-container">
+                    <div id="battery-fill"></div>
+                </div>
+                <div class="flex justify-between w-full text-[10px] text-slate-300/75">
+                    <span>Hold L-Click: Steer Ships Toward Light</span>
+                    <span>Scroll: Beam Size (22u–85u)</span>
+                    <span>R-Click: Cannon (3s Reload)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start / Instructions Modal -->
+    <div id="instructions" class="hud-modal">
+        <div class="flex items-center justify-between border-b border-sky-400/20 pb-3 mb-4">
+            <div>
+                <h1 class="text-2xl font-extrabold tracking-wider text-white uppercase">Beacon of the Storm</h1>
+                <p class="text-xs text-sky-300/80">Isometric 2.5D Lighthouse Defense &bull; Dark Waters Edition</p>
+            </div>
+            <span class="px-2.5 py-1 rounded bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-bold mono">v2.5 ISO</span>
+        </div>
+
+        <ul class="text-left text-slate-200/90 space-y-2.5 mb-5 text-xs leading-relaxed">
+            <li><strong class="text-amber-300">Light Direction Steering (Bug Fix):</strong> Cargo ships <span class="underline">follow the last direction of your light source</span> (<code class="text-cyan-300">lastLightDir</code>). Shine the beam ahead of a ship or sweep across it to set its heading vector toward the circular Safe Harbor!</li>
+            <li><strong class="text-cyan-300">Pulse Momentum &amp; Storm Drift:</strong> Lit ships sail at 100% speed along their light-set heading. In darkness, they retain partial forward momentum while storm crosswinds &amp; whirlpools push them sideways toward jagged rocks.</li>
+            <li><strong class="text-emerald-300">Compact Circular Safe Harbor:</strong> Guide ships into the glowing circular sanctuary ring (<span class="mono">45u</span> radius). Short surgical light pulses earn up to an <strong class="text-amber-300">S+ (5.0x) Eco-Rating</strong>!</li>
+            <li><strong class="text-rose-400">Surgical Cannon &amp; Friendly Fire:</strong> Right-Click fires a tight <span class="mono">30u</span> AoE blast (3s reload) to sink Pirates and stun Krakens. <strong class="text-rose-300">Watch your aim—cannon blasts will sink friendly Cargo Ships (-200 pts)!</strong></li>
+            <li><strong class="text-purple-300">Varying Entity Speeds &amp; Lightning:</strong> Swift Cutters, Merchant Brigs, Heavy Galleons, lunging Pirates, and surging Krakens all move at distinct speeds. Use natural lightning flashes to scout for free!</li>
+        </ul>
+
+        <button id="start-btn" class="bg-teal-500/80 hover:bg-teal-400/90 text-slate-950 font-extrabold py-3 px-6 rounded-xl shadow-lg shadow-teal-500/20 transition w-full uppercase tracking-widest text-sm cursor-pointer">
+            Ignite the Lighthouse Beacon
+        </button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Elements
+        const uiScore = document.getElementById('score');
+        const uiEco = document.getElementById('eco-rating');
+        const uiSaved = document.getElementById('ships-saved');
+        const uiLost = document.getElementById('ships-lost');
+        const uiWindSpeed = document.getElementById('wind-speed');
+        const uiWindDir = document.getElementById('wind-dir-label');
+        const uiBeamRadius = document.getElementById('beam-radius-label');
+        const uiLightning = document.getElementById('lightning-status');
+        const uiCannon = document.getElementById('cannon-status');
+        const uiBatteryFill = document.getElementById('battery-fill');
+        const uiBatteryText = document.getElementById('battery-text');
+        const instructions = document.getElementById('instructions');
+        const startBtn = document.getElementById('start-btn');
+
+        // ============================================================================
+        // ISOMETRIC WORLD & PROJECTION ENGINE
+        // ============================================================================
+        // World coordinate space spans roughly [-420, 420] on X and Y axes
+        const WORLD_BOUND = 420;
+        let isoScale = 1.0;
+        let originX = 0;
+        let originY = 0;
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            isoScale = Math.max(0.62, Math.min(canvas.width / 1180, canvas.height / 680));
+            originX = canvas.width * 0.5;
+            originY = canvas.height * 0.5;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Convert 3D world (wx, wy, wz) to 2D isometric screen coordinates
+        function worldToIso(wx, wy, wz = 0) {
+            return {
+                x: originX + (wx - wy) * isoScale,
+                y: originY + (wx + wy) * 0.5 * isoScale - wz * isoScale
+            };
+        }
+
+        // Exact inverse mapping from 2D screen coordinates to 2D world ocean plane (wz = 0)
+        function isoToWorld(sx, sy) {
+            const dx = (sx - originX) / isoScale;
+            const dy = (sy - originY) / (0.5 * isoScale);
+            return {
+                x: (dx + dy) * 0.5,
+                y: (dy - dx) * 0.5
+            };
+        }
+
+        // Convert a 2D world direction vector into screen-space angle for wakes/arrows
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, val));
+        }
+
+        function normalize2D(vx, vy) {
+            const len = Math.hypot(vx, vy);
+            if (len < 0.0001) return { x: 0.7071, y: 0.7071 };
+            return { x: vx / len, y: vy / len };
+        }
+
+        // ============================================================================
+        // GAME CONSTANTS & STATE
+        // ============================================================================
+        let gameRunning = false;
+        let lastTime = 0;
+        let globalTime = 0;
+
+        let score = 0;
+        let shipsSaved = 0;
+        let shipsLost = 0;
+
+        // High-capacity regenerative battery (200 Max Capacity)
+        const MAX_BATTERY = 200;
+        let battery = MAX_BATTERY;
+
+        // Smaller default light diameter (42u, scroll adjustable 22u - 85u)
+        const light = {
+            radius: 42,
+            minRadius: 22,
+            maxRadius: 85,
+            baseDrainRate: 11.5,
+            regenRate: 16.0
+        };
+
+        // Compact Circular Safe Harbor (45 world units radius)
+        const HARBOR = {
+            x: 135,
+            y: 135,
+            radius: 45
+        };
+
+        // Lighthouse perched on a rocky outcrop just behind the Safe Harbor
+        const LIGHTHOUSE = {
+            x: 205,
+            y: 205
+        };
+
+        // Decreased Cannon AoE (30 world units) & 3.0s reload cooldown
+        const CANNON_AOE_RADIUS = 30;
+        const CANNON_RELOAD_TIME = 3.0;
+        let cannonCooldown = 0;
+
+        // Dynamic Storm Crosswind State (Varying speed 18 - 36 u/s)
+        const wind = {
+            angle: Math.PI * 0.28, // blows roughly toward +X / +Y
+            speed: 25,
+            targetSpeed: 28,
+            targetAngle: Math.PI * 0.28,
+            gustTimer: 0,
+            vx: 18,
+            vy: 16
+        };
+
+        // Randomized Lightning Storm State
+        const lightning = {
+            timer: 5.5,
+            flashAlpha: 0,
+            isIlluminating: false,
+            bolts: [],
+            shakeX: 0,
+            shakeY: 0
+        };
+
+        // Mouse & World Cursor Tracking
+        const mouse = {
+            sx: window.innerWidth * 0.5,
+            sy: window.innerHeight * 0.5,
+            wx: 0,
+            wy: 0,
+            prevWx: 0,
+            prevWy: 0,
+            vx: 0,
+            vy: 0,
+            leftDown: false
+        };
+
+        // Entity Collections
+        let ships = [];
+        let pirates = [];
+        let krakens = [];
+        let rocks = [];
+        let whirlpools = [];
+        let cannonShells = [];
+        let blasts = [];
+        let particles = [];
+        let floatingTexts = [];
+        let rainDrops = [];
+
+        let spawnTimers = {
+            ship: 1.5,
+            pirate: 7.0,
+            kraken: 11.0
+        };
+
+        // Initialize ambient rain particles
+        for (let i = 0; i < 110; i++) {
+            rainDrops.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight,
+                len: 12 + Math.random() * 14,
+                speed: 550 + Math.random() * 250
+            });
+        }
+
+        // ============================================================================
+        // INPUT LISTENERS
+        // ============================================================================
+        window.addEventListener('mousemove', (e) => {
+            mouse.sx = e.clientX;
+            mouse.sy = e.clientY;
+            const wPos = isoToWorld(mouse.sx, mouse.sy);
+            const dx = wPos.x - mouse.wx;
+            const dy = wPos.y - mouse.wy;
+            if (Math.hypot(dx, dy) > 0.2) {
+                mouse.vx = dx;
+                mouse.vy = dy;
+            }
+            mouse.prevWx = mouse.wx;
+            mouse.prevWy = mouse.wy;
+            mouse.wx = wPos.x;
+            mouse.wy = wPos.y;
+        });
+
+        window.addEventListener('mousedown', (e) => {
+            if (!gameRunning) return;
+            if (e.button === 0) {
+                mouse.leftDown = true;
+            } else if (e.button === 2) {
+                if (cannonCooldown <= 0) {
+                    fireCannon(mouse.wx, mouse.wy);
+                } else {
+                    spawnFloatingText(mouse.wx, mouse.wy, `RELOADING (${cannonCooldown.toFixed(1)}s)`, '#f87171', 0.7);
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) mouse.leftDown = false;
+        });
+
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        window.addEventListener('wheel', (e) => {
+            if (!gameRunning) return;
+            light.radius = clamp(light.radius - e.deltaY * 0.04, light.minRadius, light.maxRadius);
+            uiBeamRadius.innerText = `R: ${Math.round(light.radius)}u`;
+        }, { passive: true });
+
+        startBtn.addEventListener('click', () => {
+            instructions.style.display = 'none';
+            initGame();
+        });
+
+        // ============================================================================
+        // CARGO SHIP CLASS (WITH LAST LIGHT DIRECTION STEERING & 3 SPEED CLASSES)
+        // ============================================================================
+        const CARGO_CLASSES = [
+            {
+                id: 'cutter',
+                name: 'Swift Cutter',
+                shortTag: 'CUTTER',
+                minSpeed: 48,
+                maxSpeed: 58,
+                windFactor: 1.18,
+                basePoints: 130,
+                width: 9,
+                length: 20,
+                height: 7,
+                hullTop: '#64748b',
+                hullLeft: '#334155',
+                hullRight: '#1e293b',
+                cargoColor: '#38bdf8'
+            },
+            {
+                id: 'brig',
+                name: 'Merchant Brig',
+                shortTag: 'BRIG',
+                minSpeed: 34,
+                maxSpeed: 44,
+                windFactor: 1.0,
+                basePoints: 160,
+                width: 12,
+                length: 26,
+                height: 9,
+                hullTop: '#475569',
+                hullLeft: '#293548',
+                hullRight: '#0f172a',
+                cargoColor: '#f59e0b'
+            },
+            {
+                id: 'galleon',
+                name: 'Heavy Galleon',
+                shortTag: 'GALLEON',
+                minSpeed: 22,
+                maxSpeed: 31,
+                windFactor: 0.75,
+                basePoints: 230,
+                width: 15,
+                length: 33,
+                height: 12,
+                hullTop: '#78350f',
+                hullLeft: '#451a03',
+                hullRight: '#270e02',
+                cargoColor: '#10b981'
+            }
+        ];
+
+        class CargoShip {
+            constructor() {
+                // Pick one of the 3 distinct speed classes
+                const cls = CARGO_CLASSES[Math.floor(Math.random() * CARGO_CLASSES.length)];
+                this.cls = cls;
+                this.speed = cls.minSpeed + Math.random() * (cls.maxSpeed - cls.minSpeed);
+                this.windFactor = cls.windFactor;
+                this.basePoints = cls.basePoints;
+                this.width = cls.width;
+                this.length = cls.length;
+                this.height = cls.height;
+
+                // Spawn along the outer North-West / North-East / South-West edges
+                const edgeRoll = Math.random();
+                if (edgeRoll < 0.45) {
+                    // Top-Left edge (North-West)
+                    this.x = -WORLD_BOUND + 20;
+                    this.y = -WORLD_BOUND + 40 + Math.random() * 520;
+                } else if (edgeRoll < 0.85) {
+                    // Top-Right edge (North-East)
+                    this.x = -WORLD_BOUND + 40 + Math.random() * 520;
+                    this.y = -WORLD_BOUND + 20;
+                } else {
+                    // Far West corner
+                    this.x = -WORLD_BOUND + 30 + Math.random() * 140;
+                    this.y = -WORLD_BOUND + 30 + Math.random() * 140;
+                }
+
+                // Initial heading: roughly inward onto the sea, intentionally NOT aimed directly at the Harbor
+                // so the player must guide the ship using the light source direction!
+                const inwardTargetX = -40 + (Math.random() - 0.5) * 220;
+                const inwardTargetY = -40 + (Math.random() - 0.5) * 220;
+                this.lastLightDir = normalize2D(inwardTargetX - this.x, inwardTargetY - this.y);
+
+                this.batterySpent = 0;
+                this.isLitByBeam = false;
+                this.isIlluminated = false;
+                this.pulseMomentum = 0; // Post-illumination momentum timer (seconds)
+                this.isDead = false;
+                this.wakePhase = Math.random() * Math.PI * 2;
+            }
+
+            update(dt, beamActive, currentDrainRate, lightningActive) {
+                const distToLight = Math.hypot(mouse.wx - this.x, mouse.wy - this.y);
+
+                // Check if inside the player's active light beam
+                // Also allow a small steering halo (light.radius + 16) when the ship was just lit
+                // so dragging/flicking the light edge smoothly pulls the ship's heading toward the light!
+                const inBeamCore = beamActive && distToLight <= light.radius;
+                const inSteeringHalo = beamActive && this.pulseMomentum > 1.8 && distToLight <= light.radius + 22;
+
+                this.isLitByBeam = inBeamCore;
+                this.isIlluminated = inBeamCore || lightningActive;
+
+                // CRITICAL BUG FIX: Update lastLightDir toward the light source position!
+                // Note: Lightning strikes illuminate the ship's current path without overwriting lastLightDir.
+                if (inBeamCore || inSteeringHalo) {
+                    if (distToLight > 4.0) {
+                        // Steer toward the light source center relative to the ship
+                        const toLight = normalize2D(mouse.wx - this.x, mouse.wy - this.y);
+                        const blend = Math.min(1.0, dt * 14.0);
+                        this.lastLightDir = normalize2D(
+                            this.lastLightDir.x + (toLight.x - this.lastLightDir.x) * blend,
+                            this.lastLightDir.y + (toLight.y - this.lastLightDir.y) * blend
+                        );
+                    } else if (Math.hypot(mouse.vx, mouse.vy) > 0.35) {
+                        // Light center is directly on top of the ship; follow mouse sweep direction
+                        const sweepDir = normalize2D(mouse.vx, mouse.vy);
+                        const blend = Math.min(1.0, dt * 14.0);
+                        this.lastLightDir = normalize2D(
+                            this.lastLightDir.x + (sweepDir.x - this.lastLightDir.x) * blend,
+                            this.lastLightDir.y + (sweepDir.y - this.lastLightDir.y) * blend
+                        );
+                    }
+
+                    if (inBeamCore) {
+                        this.pulseMomentum = 3.0; // Refresh post-pulse glide momentum
+                        this.batterySpent += currentDrainRate * dt;
+                    }
+                } else if (this.pulseMomentum > 0) {
+                    this.pulseMomentum = Math.max(0, this.pulseMomentum - dt);
+                }
+
+                // Movement physics along lastLightDir
+                if (this.isIlluminated) {
+                    // Rule of Light: 100% forward speed along lastLightDir, zero wind drift
+                    this.x += this.lastLightDir.x * this.speed * dt;
+                    this.y += this.lastLightDir.y * this.speed * dt;
+                } else {
+                    // Rule of Darkness + Pulse Momentum:
+                    // Ships retain base forward motion along lastLightDir (45% base, up to 90% right after a light pulse)
+                    // while storm crosswinds and whirlpools push them off course!
+                    const momentumRatio = this.pulseMomentum / 3.0;
+                    const forwardFactor = 0.45 + 0.45 * momentumRatio;
+                    const driftSuppression = 1.0 - 0.65 * momentumRatio;
+
+                    this.x += this.lastLightDir.x * (this.speed * forwardFactor) * dt;
+                    this.y += this.lastLightDir.y * (this.speed * forwardFactor) * dt;
+
+                    // Apply Storm Crosswind
+                    this.x += wind.vx * this.windFactor * driftSuppression * dt;
+                    this.y += wind.vy * this.windFactor * driftSuppression * dt;
+
+                    // Apply Whirlpool Vortex Pull if nearby
+                    for (const wp of whirlpools) {
+                        const dx = wp.x - this.x;
+                        const dy = wp.y - this.y;
+                        const d = Math.hypot(dx, dy);
+                        if (d < wp.pullRadius && d > 1) {
+                            const pullStrength = (1 - d / wp.pullRadius) * wp.pullSpeed;
+                            // Inward suction + tangential swirl
+                            const nx = dx / d;
+                            const ny = dy / d;
+                            this.x += (nx * pullStrength + (-ny) * pullStrength * 0.65) * dt;
+                            this.y += (ny * pullStrength + (nx) * pullStrength * 0.65) * dt;
+                        }
+                    }
+                }
+
+                // Keep within broad world boundaries
+                if (this.x < -WORLD_BOUND - 80 || this.x > WORLD_BOUND + 120 ||
+                    this.y < -WORLD_BOUND - 80 || this.y > WORLD_BOUND + 120) {
+                    this.isDead = true;
+                    shipsLost++;
+                    spawnFloatingText(
+                        clamp(this.x, -WORLD_BOUND + 30, WORLD_BOUND - 30),
+                        clamp(this.y, -WORLD_BOUND + 30, WORLD_BOUND - 30),
+                        'SHIP LOST AT SEA!',
+                        '#f87171',
+                        1.4
+                    );
+                }
+            }
+
+            draw(ctx, pos) {
+                // 1. Draw Directional Heading Indicator (lastLightDir)
+                const arrowWorldDist = 42;
+                const tipWorldX = this.x + this.lastLightDir.x * arrowWorldDist;
+                const tipWorldY = this.y + this.lastLightDir.y * arrowWorldDist;
+                const tipScreen = worldToIso(tipWorldX, tipWorldY, 2);
+
+                ctx.save();
+                ctx.strokeStyle = this.isLitByBeam
+                    ? 'rgba(253, 224, 71, 0.92)'
+                    : (this.pulseMomentum > 0 ? 'rgba(56, 189, 248, 0.68)' : 'rgba(56, 189, 248, 0.30)');
+                ctx.lineWidth = this.isLitByBeam ? 2.2 : 1.4;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y - 2);
+                ctx.lineTo(tipScreen.x, tipScreen.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Arrowhead at tipScreen
+                const ang = Math.atan2(tipScreen.y - (pos.y - 2), tipScreen.x - pos.x);
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.beginPath();
+                ctx.moveTo(tipScreen.x, tipScreen.y);
+                ctx.lineTo(tipScreen.x - Math.cos(ang - 0.5) * 7, tipScreen.y - Math.sin(ang - 0.5) * 7);
+                ctx.lineTo(tipScreen.x - Math.cos(ang + 0.5) * 7, tipScreen.y - Math.sin(ang + 0.5) * 7);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+
+                // 2. Water Wake Ripple
+                const wakeSize = (this.width + 4) * isoScale;
+                ctx.strokeStyle = this.isIlluminated ? 'rgba(186, 230, 253, 0.45)' : 'rgba(148, 163, 184, 0.16)';
+                ctx.lineWidth = 1.3;
+                ctx.beginPath();
+                ctx.ellipse(pos.x, pos.y + 2, wakeSize, wakeSize * 0.5, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 3. Isometric Ship Hull
+                const w = this.width * isoScale;
+                const l = this.length * isoScale;
+                const h = this.height * isoScale;
+                drawIsoBox(ctx, pos.x, pos.y, w, l, h, this.cls.hullTop, this.cls.hullLeft, this.cls.hullRight);
+
+                // 4. Cargo Containers & Cabin
+                drawIsoBox(
+                    ctx,
+                    pos.x,
+                    pos.y - h,
+                    w * 0.68,
+                    l * 0.48,
+                    h * 0.65,
+                    this.cls.cargoColor,
+                    '#1e293b',
+                    '#0f172a'
+                );
+
+                // 5. Mast & Warm Deck Lantern
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y - h);
+                ctx.lineTo(pos.x, pos.y - h - 18 * isoScale);
+                ctx.stroke();
+
+                // Lantern glow at mast top
+                ctx.fillStyle = this.isLitByBeam ? '#fef08a' : '#f59e0b';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y - h - 18 * isoScale, 2.8 * isoScale, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 6. Speed Class Tag when illuminated or pulsing
+                if (this.isIlluminated || this.pulseMomentum > 0.5) {
+                    ctx.font = 'bold 9px "JetBrains Mono", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = 'rgba(226, 232, 240, 0.85)';
+                    ctx.fillText(`${this.cls.shortTag} ${Math.round(this.speed)}u/s`, pos.x, pos.y - h - 24 * isoScale);
+                }
+            }
+        }
+
+        // ============================================================================
+        // PIRATE SHIP CLASS (VARYING SPEEDS + LUNGE BURST)
+        // ============================================================================
+        class PirateShip {
+            constructor() {
+                const side = Math.floor(Math.random() * 3);
+                if (side === 0) {
+                    this.x = -WORLD_BOUND + 15;
+                    this.y = (Math.random() - 0.3) * WORLD_BOUND * 1.4;
+                } else if (side === 1) {
+                    this.x = (Math.random() - 0.3) * WORLD_BOUND * 1.4;
+                    this.y = -WORLD_BOUND + 15;
+                } else {
+                    this.x = WORLD_BOUND - 20;
+                    this.y = -WORLD_BOUND + 40 + Math.random() * 300;
+                }
+
+                // Randomized individual base speed (38 - 68 u/s)
+                this.baseSpeed = 38 + Math.random() * 30;
+                this.currentSpeed = this.baseSpeed;
+                this.isLunging = false;
+                this.isDead = false;
+            }
+
+            update(dt) {
+                let nearestDist = Infinity;
+                let target = null;
+                for (const s of ships) {
+                    const d = Math.hypot(s.x - this.x, s.y - this.y);
+                    if (d < nearestDist) {
+                        nearestDist = d;
+                        target = s;
+                    }
+                }
+
+                if (target) {
+                    // Lunge burst acceleration when within 135 world units of a cargo ship
+                    this.isLunging = nearestDist < 135;
+                    this.currentSpeed = this.isLunging ? this.baseSpeed * 1.25 : this.baseSpeed;
+
+                    const dir = normalize2D(target.x - this.x, target.y - this.y);
+                    this.x += dir.x * this.currentSpeed * dt;
+                    this.y += dir.y * this.currentSpeed * dt;
+
+                    // Boarding / ramming collision
+                    if (nearestDist < 18) {
+                        target.isDead = true;
+                        this.isDead = true;
+                        shipsLost++;
+                        createExplosion(target.x, target.y, '#ef4444', 24);
+                        spawnFloatingText(target.x, target.y, 'PLUNDERED BY PIRATES!', '#f87171', 1.4);
+                    }
+                } else {
+                    this.isLunging = false;
+                    this.currentSpeed = this.baseSpeed * 0.75;
+                    // Prowl toward center
+                    const dir = normalize2D(-this.x, -this.y);
+                    this.x += (dir.x * this.currentSpeed + wind.vx * 0.4) * dt;
+                    this.y += (dir.y * this.currentSpeed + wind.vy * 0.4) * dt;
+                }
+            }
+
+            draw(ctx, pos) {
+                const w = 10 * isoScale;
+                const l = 23 * isoScale;
+                const h = 8 * isoScale;
+                drawIsoBox(ctx, pos.x, pos.y, w, l, h, '#1e1b2e', '#0f0d19', '#07060c');
+
+                // Tattered Crimson Pirate Sail
+                ctx.fillStyle = this.isLunging ? '#ef4444' : '#991b1b';
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y - h);
+                ctx.lineTo(pos.x - 10 * isoScale, pos.y - h - 24 * isoScale);
+                ctx.lineTo(pos.x + 12 * isoScale, pos.y - h - 11 * isoScale);
+                ctx.closePath();
+                ctx.fill();
+
+                // Skull/Danger glint
+                ctx.fillStyle = '#fca5a5';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y - h - 13 * isoScale, 2.2 * isoScale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // ============================================================================
+        // KRAKEN CLASS (VARYING SPEEDS + SINUSOIDAL PROPULSION SURGE + LIGHT DEFLECTION)
+        // ============================================================================
+        class Kraken {
+            constructor() {
+                this.x = (Math.random() - 0.5) * 480;
+                this.y = (Math.random() - 0.5) * 480;
+                // Keep away from immediate harbor spawn
+                if (Math.hypot(this.x - HARBOR.x, this.y - HARBOR.y) < 130) {
+                    this.x = -180;
+                    this.y = -120;
+                }
+
+                // Individual roaming speed (28 - 55 u/s) + flee speed (85 - 105 u/s)
+                this.baseSpeed = 28 + Math.random() * 27;
+                this.fleeSpeed = 85 + Math.random() * 20;
+                this.surgePhase = Math.random() * Math.PI * 2;
+                this.stunTimer = 0;
+                this.wanderTarget = { x: (Math.random() - 0.5) * 420, y: (Math.random() - 0.5) * 420 };
+                this.retargetTimer = 3.5;
+                this.isDead = false;
+            }
+
+            update(dt, isLitByBeam) {
+                this.surgePhase += dt * 4.5;
+
+                if (this.stunTimer > 0) {
+                    this.stunTimer -= dt;
+                    return;
+                }
+
+                if (isLitByBeam) {
+                    // Deflected rapidly away from the lighthouse spotlight
+                    const away = normalize2D(this.x - mouse.wx, this.y - mouse.wy);
+                    this.x += away.x * this.fleeSpeed * dt;
+                    this.y += away.y * this.fleeSpeed * dt;
+                } else {
+                    this.retargetTimer -= dt;
+                    if (this.retargetTimer <= 0) {
+                        // Hunt nearest cargo ship if within 220 units, else roam
+                        let hunted = null;
+                        let bestD = 220;
+                        for (const s of ships) {
+                            const d = Math.hypot(s.x - this.x, s.y - this.y);
+                            if (d < bestD) {
+                                bestD = d;
+                                hunted = s;
+                            }
+                        }
+                        if (hunted) {
+                            this.wanderTarget = { x: hunted.x, y: hunted.y };
+                        } else {
+                            this.wanderTarget = {
+                                x: (Math.random() - 0.5) * 520,
+                                y: (Math.random() - 0.5) * 520
+                            };
+                        }
+                        this.retargetTimer = 2.5 + Math.random() * 2.5;
+                    }
+
+                    // Sinusoidal burst-and-glide propulsion surge
+                    const surgeMultiplier = 1.0 + 0.38 * Math.sin(this.surgePhase);
+                    const effectiveSpeed = this.baseSpeed * surgeMultiplier;
+
+                    const d = Math.hypot(this.wanderTarget.x - this.x, this.wanderTarget.y - this.y);
+                    if (d > 6) {
+                        const dir = normalize2D(this.wanderTarget.x - this.x, this.wanderTarget.y - this.y);
+                        this.x += dir.x * effectiveSpeed * dt;
+                        this.y += dir.y * effectiveSpeed * dt;
+                    }
+                }
+
+                // Keep Kraken out of the Safe Harbor sanctuary
+                const distToHarbor = Math.hypot(this.x - HARBOR.x, this.y - HARBOR.y);
+                if (distToHarbor < HARBOR.radius + 25) {
+                    const pushOut = normalize2D(this.x - HARBOR.x, this.y - HARBOR.y);
+                    this.x = HARBOR.x + pushOut.x * (HARBOR.radius + 26);
+                    this.y = HARBOR.y + pushOut.y * (HARBOR.radius + 26);
+                }
+
+                // Devour nearby cargo ships
+                for (const s of ships) {
+                    if (Math.hypot(s.x - this.x, s.y - this.y) < 22) {
+                        s.isDead = true;
+                        shipsLost++;
+                        createExplosion(s.x, s.y, '#a855f7', 26);
+                        spawnFloatingText(s.x, s.y, 'DEVOURED BY KRAKEN!', '#c084fc', 1.4);
+                    }
+                }
+
+                if (Math.abs(this.x) > WORLD_BOUND + 160 || Math.abs(this.y) > WORLD_BOUND + 160) {
+                    this.isDead = true;
+                }
+            }
+
+            draw(ctx, pos) {
+                const pulse = Math.sin(this.surgePhase) * 2.5 * isoScale;
+
+                // Bioluminescent Mantle
+                ctx.fillStyle = this.stunTimer > 0 ? '#64748b' : '#6b21a8';
+                ctx.beginPath();
+                ctx.ellipse(pos.x, pos.y - 9 * isoScale - pulse, 14 * isoScale + pulse, 18 * isoScale + pulse, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Glowing Eyes
+                ctx.fillStyle = '#4ade80';
+                ctx.fillRect(pos.x - 5 * isoScale, pos.y - 14 * isoScale - pulse, 3.2 * isoScale, 2.5 * isoScale);
+                ctx.fillRect(pos.x + 2 * isoScale, pos.y - 14 * isoScale - pulse, 3.2 * isoScale, 2.5 * isoScale);
+
+                // Writhing Tentacles
+                ctx.strokeStyle = '#9333ea';
+                ctx.lineWidth = 3.2 * isoScale;
+                for (let i = 0; i < 5; i++) {
+                    const wave = Math.sin(globalTime * 6 + i * 1.3) * 8 * isoScale;
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x - 10 * isoScale + i * 5 * isoScale, pos.y - 2 * isoScale);
+                    ctx.quadraticCurveTo(
+                        pos.x - 12 * isoScale + i * 6 * isoScale + wave,
+                        pos.y + 10 * isoScale,
+                        pos.x - 8 * isoScale + i * 5 * isoScale + wave,
+                        pos.y + 15 * isoScale
+                    );
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // ============================================================================
+        // ENVIRONMENT HAZARDS & COMBAT HELPERS
+        // ============================================================================
+        function generateHazards() {
+            rocks = [];
+            whirlpools = [];
+
+            // Generate jagged rock clusters across the shipping lanes
+            const rockCount = 9;
+            for (let i = 0; i < rockCount; i++) {
+                let rx = (Math.random() - 0.5) * 580;
+                let ry = (Math.random() - 0.5) * 580;
+                // Keep clear of Safe Harbor and Lighthouse
+                if (Math.hypot(rx - HARBOR.x, ry - HARBOR.y) < HARBOR.radius + 75) continue;
+                if (Math.hypot(rx - LIGHTHOUSE.x, ry - LIGHTHOUSE.y) < 85) continue;
+                rocks.push({
+                    x: rx,
+                    y: ry,
+                    radius: 22 + Math.random() * 8
+                });
+            }
+
+            // Generate spinning whirlpools with varying pull speeds
+            const wpCount = 4;
+            for (let i = 0; i < wpCount; i++) {
+                let wx = (Math.random() - 0.5) * 520;
+                let wy = (Math.random() - 0.5) * 520;
+                if (Math.hypot(wx - HARBOR.x, wy - HARBOR.y) < HARBOR.radius + 85) continue;
+                whirlpools.push({
+                    x: wx,
+                    y: wy,
+                    killRadius: 16,
+                    pullRadius: 72,
+                    pullSpeed: 22 + Math.random() * 16, // Varying pull speed (22 - 38 u/s)
+                    spinSpeed: 2.8 + Math.random() * 1.8
+                });
+            }
+        }
+
+        function fireCannon(targetWx, targetWy) {
+            cannonCooldown = CANNON_RELOAD_TIME;
+            // Launch fast-traveling cannonball from Lighthouse top to exact target coordinates
+            cannonShells.push({
+                startX: LIGHTHOUSE.x,
+                startY: LIGHTHOUSE.y,
+                targetX: targetWx,
+                targetY: targetWy,
+                progress: 0,
+                duration: 0.16 // Crisp, near-instant surgical strike
+            });
+        }
+
+        function detonateCannonShell(wx, wy) {
+            // Visual blast matching the exact 30-unit AoE radius
+            blasts.push({
+                x: wx,
+                y: wy,
+                radius: 4,
+                maxRadius: CANNON_AOE_RADIUS,
+                life: 1.0
+            });
+            createExplosion(wx, wy, '#f97316', 28, true);
+
+            // 1. Check Pirate Ships inside 30u AoE
+            for (const p of pirates) {
+                if (!p.isDead && Math.hypot(p.x - wx, p.y - wy) <= CANNON_AOE_RADIUS) {
+                    p.isDead = true;
+                    score += 150;
+                    createExplosion(p.x, p.y, '#ef4444', 22);
+                    spawnFloatingText(p.x, p.y, '+150 PIRATE SUNK!', '#fde047', 1.2);
+                }
+            }
+
+            // 2. Check Krakens inside 30u AoE (Stun & Repel)
+            for (const k of krakens) {
+                const dist = Math.hypot(k.x - wx, k.y - wy);
+                if (!k.isDead && dist <= CANNON_AOE_RADIUS + 8) {
+                    k.stunTimer = 2.5;
+                    const push = normalize2D(k.x - wx, k.y - wy);
+                    k.x += push.x * 55;
+                    k.y += push.y * 55;
+                    score += 100;
+                    createExplosion(k.x, k.y, '#a855f7', 18);
+                    spawnFloatingText(k.x, k.y, '+100 KRAKEN BLASTED!', '#d8b4fe', 1.2);
+                }
+            }
+
+            // 3. CRITICAL NEW FEATURE: Friendly Fire on Cargo Ships inside 30u AoE!
+            for (const s of ships) {
+                if (!s.isDead && Math.hypot(s.x - wx, s.y - wy) <= CANNON_AOE_RADIUS) {
+                    s.isDead = true;
+                    shipsLost++;
+                    score = Math.max(0, score - 200);
+                    createExplosion(s.x, s.y, '#fb923c', 35);
+                    spawnFloatingText(s.x, s.y, '⚠ FRIENDLY FIRE! CARGO SUNK! (-200)', '#ff5722', 1.8);
+                }
+            }
+        }
+
+        function triggerLightningStrike() {
+            lightning.flashAlpha = 0.92;
+            lightning.isIlluminating = true;
+            lightning.shakeX = (Math.random() - 0.5) * 10;
+            lightning.shakeY = (Math.random() - 0.5) * 10;
+
+            // Create 1-2 branching sky bolts
+            lightning.bolts = [];
+            const boltCount = 1 + (Math.random() > 0.55 ? 1 : 0);
+            for (let b = 0; b < boltCount; b++) {
+                const points = [];
+                let bx = canvas.width * (0.15 + Math.random() * 0.7);
+                let by = 0;
+                const targetY = canvas.height * (0.45 + Math.random() * 0.35);
+                while (by < targetY) {
+                    points.push({ x: bx, y: by });
+                    bx += (Math.random() - 0.5) * 55;
+                    by += 28 + Math.random() * 30;
+                }
+                lightning.bolts.push(points);
+            }
+        }
+
+        function createExplosion(wx, wy, color, count = 18, isCannon = false) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: wx,
+                    y: wy,
+                    z: isCannon ? 2 : 8,
+                    vx: (Math.random() - 0.5) * 120,
+                    vy: (Math.random() - 0.5) * 120,
+                    vz: 45 + Math.random() * 95,
+                    life: 0.7 + Math.random() * 0.5,
+                    color
+                });
+            }
+        }
+
+        function spawnFloatingText(wx, wy, text, color = '#ffffff', duration = 1.2) {
+            floatingTexts.push({
+                wx,
+                wy,
+                wz: 18,
+                text,
+                color,
+                life: duration,
+                maxLife: duration
+            });
+        }
+
+        function drawIsoBox(ctx, sx, sy, w, l, h, cTop, cLeft, cRight) {
+            const dxW = w;
+            const dyW = w * 0.5;
+            const dxL = -l;
+            const dyL = l * 0.5;
+
+            // Left Face
+            ctx.fillStyle = cLeft;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + dxL, sy + dyL);
+            ctx.lineTo(sx + dxL, sy + dyL - h);
+            ctx.lineTo(sx, sy - h);
+            ctx.closePath();
+            ctx.fill();
+
+            // Right Face
+            ctx.fillStyle = cRight;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + dxW, sy + dyW);
+            ctx.lineTo(sx + dxW, sy + dyW - h);
+            ctx.lineTo(sx, sy - h);
+            ctx.closePath();
+            ctx.fill();
+
+            // Top Face
+            ctx.fillStyle = cTop;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy - h);
+            ctx.lineTo(sx + dxW, sy + dyW - h);
+            ctx.lineTo(sx + dxW + dxL, sy + dyW + dyL - h);
+            ctx.lineTo(sx + dxL, sy + dyL - h);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // ============================================================================
+        // GAME INITIALIZATION & MAIN LOOP
+        // ============================================================================
+        function initGame() {
+            score = 0;
+            shipsSaved = 0;
+            shipsLost = 0;
+            battery = MAX_BATTERY;
+            cannonCooldown = 0;
+            lightning.timer = 3.5;
+            lightning.flashAlpha = 0;
+
+            ships = [];
+            pirates = [];
+            krakens = [];
+            cannonShells = [];
+            blasts = [];
+            particles = [];
+            floatingTexts = [];
+
+            generateHazards();
+            // Spawn two initial cargo ships of different classes so action begins immediately
+            ships.push(new CargoShip());
+            ships.push(new CargoShip());
+
+            gameRunning = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+            lastTime = timestamp;
+            globalTime += dt;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(dt) {
+            // 1. Dynamic Storm Wind Fluctuations (18 - 36 u/s)
+            wind.gustTimer -= dt;
+            if (wind.gustTimer <= 0) {
+                wind.targetSpeed = 18 + Math.random() * 18;
+                wind.targetAngle = Math.PI * (0.18 + Math.random() * 0.25);
+                wind.gustTimer = 4.0 + Math.random() * 3.0;
+            }
+            wind.speed += (wind.targetSpeed - wind.speed) * dt * 0.8;
+            wind.angle += (wind.targetAngle - wind.angle) * dt * 0.8;
+            wind.vx = Math.cos(wind.angle) * wind.speed;
+            wind.vy = Math.sin(wind.angle) * wind.speed;
+
+            // 2. Lightning Storm System
+            lightning.timer -= dt;
+            if (lightning.timer <= 0) {
+                triggerLightningStrike();
+                lightning.timer = 7.5 + Math.random() * 6.5;
+            }
+            if (lightning.flashAlpha > 0) {
+                lightning.flashAlpha = Math.max(0, lightning.flashAlpha - dt * 1.45);
+                lightning.isIlluminating = lightning.flashAlpha > 0.22;
+                lightning.shakeX *= 0.85;
+                lightning.shakeY *= 0.85;
+            } else {
+                lightning.isIlluminating = false;
+                lightning.shakeX = 0;
+                lightning.shakeY = 0;
+            }
+
+            // 3. Regenerative Battery & Light Beam Drain
+            let currentDrainRate = 0;
+            let beamActive = false;
+
+            if (mouse.leftDown && battery > 0) {
+                const radiusRatio = light.radius / light.minRadius;
+                currentDrainRate = light.baseDrainRate * Math.pow(radiusRatio, 1.65);
+                battery = Math.max(0, battery - currentDrainRate * dt);
+                beamActive = battery > 0;
+            } else {
+                battery = Math.min(MAX_BATTERY, battery + light.regenRate * dt);
+            }
+
+            // 4. Cannon Reload Cooldown & Shell Flight
+            if (cannonCooldown > 0) {
+                cannonCooldown = Math.max(0, cannonCooldown - dt);
+            }
+            for (let i = cannonShells.length - 1; i >= 0; i--) {
+                const shell = cannonShells[i];
+                shell.progress += dt / shell.duration;
+                if (shell.progress >= 1.0) {
+                    detonateCannonShell(shell.targetX, shell.targetY);
+                    cannonShells.splice(i, 1);
+                }
+            }
+
+            // 5. Entity Spawners
+            spawnTimers.ship -= dt;
+            if (spawnTimers.ship <= 0 && ships.length < 6) {
+                ships.push(new CargoShip());
+                spawnTimers.ship = 4.2 + Math.random() * 2.5;
+            }
+
+            spawnTimers.pirate -= dt;
+            if (spawnTimers.pirate <= 0 && pirates.length < 3) {
+                pirates.push(new PirateShip());
+                spawnTimers.pirate = 9.0 + Math.random() * 4.5;
+            }
+
+            spawnTimers.kraken -= dt;
+            if (spawnTimers.kraken <= 0 && krakens.length < 2) {
+                krakens.push(new Kraken());
+                spawnTimers.kraken = 15.0 + Math.random() * 7.0;
+            }
+
+            // 6. Update Cargo Ships & Check Collisions / Circular Safe Harbor Arrival
+            for (let i = ships.length - 1; i >= 0; i--) {
+                const s = ships[i];
+                s.update(dt, beamActive, currentDrainRate, lightning.isIlluminating);
+
+                // Jagged Rock Collisions
+                for (const r of rocks) {
+                    if (Math.hypot(s.x - r.x, s.y - r.y) < r.radius) {
+                        s.isDead = true;
+                        shipsLost++;
+                        createExplosion(s.x, s.y, '#94a3b8', 22);
+                        spawnFloatingText(s.x, s.y, 'WRECKED ON ROCKS!', '#f87171', 1.4);
+                        break;
+                    }
+                }
+
+                // Whirlpool Core Collisions
+                if (!s.isDead) {
+                    for (const wp of whirlpools) {
+                        if (Math.hypot(s.x - wp.x, s.y - wp.y) < wp.killRadius) {
+                            s.isDead = true;
+                            shipsLost++;
+                            createExplosion(s.x, s.y, '#38bdf8', 22);
+                            spawnFloatingText(s.x, s.y, 'SWALLOWED BY VORTEX!', '#38bdf8', 1.4);
+                            break;
+                        }
+                    }
+                }
+
+                // Compact Circular Safe Harbor Check (Radius = 45 world units)
+                if (!s.isDead && Math.hypot(s.x - HARBOR.x, s.y - HARBOR.y) <= HARBOR.radius) {
+                    // Eco-Rating Tier Calculation based on batterySpent
+                    let ratingTier = 'C';
+                    let ecoMult = 1.0;
+                    if (s.batterySpent <= 14) {
+                        ratingTier = 'S+';
+                        ecoMult = 5.0;
+                    } else if (s.batterySpent <= 30) {
+                        ratingTier = 'A';
+                        ecoMult = 3.5;
+                    } else if (s.batterySpent <= 55) {
+                        ratingTier = 'B';
+                        ecoMult = 2.0;
+                    }
+
+                    const earned = Math.round(s.basePoints * ecoMult);
+                    score += earned;
+                    shipsSaved++;
+
+                    uiEco.innerText = `${ratingTier} (${ecoMult.toFixed(1)}x) • +${earned}`;
+                    createExplosion(s.x, s.y, '#34d399', 26);
+                    spawnFloatingText(
+                        s.x,
+                        s.y,
+                        `HARBOR SAFE! +${earned} [ECO ${ratingTier}]`,
+                        '#34d399',
+                        1.6
+                    );
+                    s.isDead = true;
+                }
+
+                if (s.isDead) ships.splice(i, 1);
+            }
+
+            // 7. Update Pirates & Krakens
+            for (let i = pirates.length - 1; i >= 0; i--) {
+                pirates[i].update(dt);
+                if (pirates[i].isDead) pirates.splice(i, 1);
+            }
+
+            for (let i = krakens.length - 1; i >= 0; i--) {
+                const k = krakens[i];
+                const isLit = beamActive && Math.hypot(k.x - mouse.wx, k.y - mouse.wy) <= light.radius + 8;
+                k.update(dt, isLit);
+                if (k.isDead) krakens.splice(i, 1);
+            }
+
+            // 8. Update Blasts, Particles, Floating Combat Text & Rain
+            for (let i = blasts.length - 1; i >= 0; i--) {
+                const b = blasts[i];
+                b.radius += (b.maxRadius - b.radius) * 16 * dt;
+                b.life -= dt * 1.8;
+                if (b.life <= 0) blasts.splice(i, 1);
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.z += p.vz * dt;
+                p.vz -= 260 * dt;
+                if (p.z < 0) {
+                    p.z = 0;
+                    p.vx *= 0.6;
+                    p.vy *= 0.6;
+                }
+                p.life -= dt;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const ft = floatingTexts[i];
+                ft.wz += 22 * dt;
+                ft.life -= dt;
+                if (ft.life <= 0) floatingTexts.splice(i, 1);
+            }
+
+            for (const r of rainDrops) {
+                r.x += 140 * dt;
+                r.y += r.speed * dt;
+                if (r.y > canvas.height) {
+                    r.y = -20;
+                    r.x = Math.random() * canvas.width;
+                }
+                if (r.x > canvas.width) r.x = 0;
+            }
+
+            updateHUD();
+        }
+
+        // ============================================================================
+        // RENDERING PIPELINE (ISOMETRIC 2.5D + NIGHT DARKNESS + LIGHTNING)
+        // ============================================================================
+        function draw() {
+            ctx.save();
+            ctx.translate(lightning.shakeX, lightning.shakeY);
+
+            // 1. Deep Night Ocean Base
+            ctx.fillStyle = '#030710';
+            ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40);
+
+            // 2. Animated Isometric Wave Grid
+            const gridAlpha = 0.035 + lightning.flashAlpha * 0.14;
+            ctx.strokeStyle = `rgba(56, 189, 248, ${gridAlpha})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let g = -WORLD_BOUND; g <= WORLD_BOUND; g += 60) {
+                const p1 = worldToIso(g, -WORLD_BOUND);
+                const p2 = worldToIso(g, WORLD_BOUND);
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+
+                const q1 = worldToIso(-WORLD_BOUND, g);
+                const q2 = worldToIso(WORLD_BOUND, g);
+                ctx.moveTo(q1.x, q1.y);
+                ctx.lineTo(q2.x, q2.y);
+            }
+            ctx.stroke();
+
+            // 3. Draw Compact Circular Safe Harbor (Exact 45u Radius in Isometric Projection)
+            const harborScreen = worldToIso(HARBOR.x, HARBOR.y);
+            const harborRx = HARBOR.radius * Math.SQRT2 * isoScale;
+            const harborRy = harborRx * 0.5;
+
+            // Sanctuary Water Glow
+            const hGrad = ctx.createRadialGradient(
+                harborScreen.x, harborScreen.y, 4,
+                harborScreen.x, harborScreen.y, harborRx
+            );
+            hGrad.addColorStop(0, 'rgba(16, 185, 129, 0.28)');
+            hGrad.addColorStop(0.7, 'rgba(20, 184, 166, 0.12)');
+            hGrad.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+            ctx.fillStyle = hGrad;
+            ctx.beginPath();
+            ctx.ellipse(harborScreen.x, harborScreen.y, harborRx, harborRy, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Circular Harbor Boundary Ring
+            ctx.strokeStyle = `rgba(52, 211, 153, ${0.55 + Math.sin(globalTime * 3) * 0.2})`;
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.ellipse(harborScreen.x, harborScreen.y, harborRx, harborRy, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner Sanctuary Ripple Ring
+            const innerPulse = ((globalTime * 0.65) % 1);
+            ctx.strokeStyle = `rgba(110, 231, 183, ${(1 - innerPulse) * 0.45})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.ellipse(harborScreen.x, harborScreen.y, harborRx * innerPulse, harborRy * innerPulse, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Floating Sanctuary Buoys around the Circular Harbor perimeter
+            const buoyCount = 8;
+            for (let i = 0; i < buoyCount; i++) {
+                const ang = (i / buoyCount) * Math.PI * 2 + globalTime * 0.25;
+                const bx = HARBOR.x + Math.cos(ang) * HARBOR.radius;
+                const by = HARBOR.y + Math.sin(ang) * HARBOR.radius;
+                const bPos = worldToIso(bx, by, 2);
+                ctx.fillStyle = i % 2 === 0 ? '#34d399' : '#fde047';
+                ctx.beginPath();
+                ctx.arc(bPos.x, bPos.y, 2.6 * isoScale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Harbor Label
+            ctx.font = 'bold 10px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(110, 231, 183, 0.78)';
+            ctx.fillText('SAFE HARBOR (45u)', harborScreen.x, harborScreen.y + 4);
+
+            // 4. Draw Whirlpools (Spinning Concentric Vortex Rings)
+            for (const wp of whirlpools) {
+                const pos = worldToIso(wp.x, wp.y);
+                const outerRx = wp.pullRadius * Math.SQRT2 * isoScale;
+                const killRx = wp.killRadius * Math.SQRT2 * isoScale;
+
+                // Outer pull zone hint
+                ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 5]);
+                ctx.beginPath();
+                ctx.ellipse(pos.x, pos.y, outerRx, outerRx * 0.5, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Spinning vortex rings
+                for (let r = 1; r <= 4; r++) {
+                    const ringRx = killRx * (0.45 + r * 0.35);
+                    const startAng = -globalTime * wp.spinSpeed * (5 - r) * 0.5 + r;
+                    ctx.strokeStyle = `rgba(34, 211, 238, ${0.58 - r * 0.1})`;
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.ellipse(pos.x, pos.y, ringRx, ringRx * 0.5, 0, startAng, startAng + Math.PI * 1.35);
+                    ctx.stroke();
+                }
+            }
+
+            // 5. Depth-Sorted 2.5D Entities (Rocks, Cargo Ships, Pirates, Krakens, Lighthouse)
+            const renderList = [];
+            renderList.push({ type: 'lighthouse', sortDepth: LIGHTHOUSE.x + LIGHTHOUSE.y });
+            for (const r of rocks) renderList.push({ type: 'rock', obj: r, sortDepth: r.x + r.y });
+            for (const s of ships) renderList.push({ type: 'ship', obj: s, sortDepth: s.x + s.y });
+            for (const p of pirates) renderList.push({ type: 'pirate', obj: p, sortDepth: p.x + p.y });
+            for (const k of krakens) renderList.push({ type: 'kraken', obj: k, sortDepth: k.x + k.y });
+
+            renderList.sort((a, b) => a.sortDepth - b.sortDepth);
+
+            for (const item of renderList) {
+                if (item.type === 'rock') {
+                    const r = item.obj;
+                    const pos = worldToIso(r.x, r.y);
+                    const sz = r.radius * 0.65 * isoScale;
+                    drawIsoBox(ctx, pos.x, pos.y, sz, sz, sz * 0.75, '#334155', '#1e293b', '#0f172a');
+                    drawIsoBox(ctx, pos.x - 6 * isoScale, pos.y - 3 * isoScale, sz * 0.55, sz * 0.55, sz * 1.05, '#475569', '#1e293b', '#090d16');
+                } else if (item.type === 'lighthouse') {
+                    drawLighthouse(ctx);
+                } else {
+                    const pos = worldToIso(item.obj.x, item.obj.y);
+                    item.obj.draw(ctx, pos);
+                }
+            }
+
+            // 6. Cannon Shells in Flight & AoE Blast Rings
+            const lhTop = worldToIso(LIGHTHOUSE.x, LIGHTHOUSE.y, 92);
+            for (const shell of cannonShells) {
+                const curWx = shell.startX + (shell.targetX - shell.startX) * shell.progress;
+                const curWy = shell.startY + (shell.targetY - shell.startY) * shell.progress;
+                const arcZ = 92 * (1 - shell.progress) + Math.sin(shell.progress * Math.PI) * 55;
+                const sPos = worldToIso(curWx, curWy, arcZ);
+
+                ctx.strokeStyle = 'rgba(251, 146, 60, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(lhTop.x, lhTop.y);
+                ctx.lineTo(sPos.x, sPos.y);
+                ctx.stroke();
+
+                ctx.fillStyle = '#fef08a';
+                ctx.beginPath();
+                ctx.arc(sPos.x, sPos.y, 4 * isoScale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (const b of blasts) {
+                const pos = worldToIso(b.x, b.y);
+                const rx = b.radius * Math.SQRT2 * isoScale;
+                const ry = rx * 0.5;
+                ctx.fillStyle = `rgba(249, 115, 22, ${b.life * 0.42})`;
+                ctx.strokeStyle = `rgba(254, 215, 170, ${b.life * 0.95})`;
+                ctx.lineWidth = 2.2;
+                ctx.beginPath();
+                ctx.ellipse(pos.x, pos.y, rx, ry, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // 7. Particles
+            for (const p of particles) {
+                const pos = worldToIso(p.x, p.y, p.z);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = clamp(p.life, 0, 1);
+                ctx.fillRect(pos.x - 2, pos.y - 2, 4, 4);
+            }
+            ctx.globalAlpha = 1.0;
+
+            // 8. Night-Time Ambient Darkness Mask (Lifted during Lightning Strikes & Punched by Light Beam)
+            drawNightAndSpotlight(ctx, lhTop);
+
+            // 9. Cursor Targeting Reticles (Light Beam + Surgical 30u Cannon AoE Ring)
+            drawCursorReticles(ctx);
+
+            // 10. Floating Combat Text
+            for (const ft of floatingTexts) {
+                const pos = worldToIso(ft.wx, ft.wy, ft.wz);
+                ctx.save();
+                ctx.font = '800 12px "Inter", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.globalAlpha = clamp(ft.life / ft.maxLife, 0, 1);
+                ctx.fillStyle = '#000000';
+                ctx.fillText(ft.text, pos.x + 1, pos.y + 1);
+                ctx.fillStyle = ft.color;
+                ctx.fillText(ft.text, pos.x, pos.y);
+                ctx.restore();
+            }
+
+            // 11. Storm Rain & Sky Lightning Bolts
+            ctx.strokeStyle = 'rgba(186, 230, 253, 0.16)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (const r of rainDrops) {
+                ctx.moveTo(r.x, r.y);
+                ctx.lineTo(r.x + 4, r.y + r.len);
+            }
+            ctx.stroke();
+
+            if (lightning.flashAlpha > 0) {
+                // Sky flash tint
+                ctx.fillStyle = `rgba(191, 219, 254, ${lightning.flashAlpha * 0.28})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Jagged Lightning Bolt Branches
+                ctx.strokeStyle = `rgba(224, 242, 254, ${lightning.flashAlpha})`;
+                ctx.lineWidth = 2.8;
+                for (const bolt of lightning.bolts) {
+                    ctx.beginPath();
+                    for (let i = 0; i < bolt.length; i++) {
+                        if (i === 0) ctx.moveTo(bolt[i].x, bolt[i].y);
+                        else ctx.lineTo(bolt[i].x, bolt[i].y);
+                    }
+                    ctx.stroke();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function drawLighthouse(ctx) {
+            const basePos = worldToIso(LIGHTHOUSE.x, LIGHTHOUSE.y);
+            // Rocky island foundation
+            drawIsoBox(ctx, basePos.x, basePos.y, 26 * isoScale, 26 * isoScale, 12 * isoScale, '#334155', '#1e293b', '#0f172a');
+
+            // Striped Cylindrical Tower
+            const towerBaseY = basePos.y - 12 * isoScale;
+            const baseR = 14 * isoScale;
+            for (let i = 0; i < 5; i++) {
+                const segH = 15 * isoScale;
+                const y0 = towerBaseY - i * segH;
+                const r0 = baseR - i * 1.4 * isoScale;
+                const r1 = baseR - (i + 1) * 1.4 * isoScale;
+                ctx.fillStyle = i % 2 === 0 ? '#cbd5e1' : '#b91c1c';
+                ctx.beginPath();
+                ctx.ellipse(basePos.x, y0, r0, r0 * 0.5, 0, 0, Math.PI, false);
+                ctx.lineTo(basePos.x - r1, y0 - segH);
+                ctx.ellipse(basePos.x, y0 - segH, r1, r1 * 0.5, 0, Math.PI, 0, true);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // Lantern Room & Glowing Bulb
+            const topPos = worldToIso(LIGHTHOUSE.x, LIGHTHOUSE.y, 92);
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(topPos.x, topPos.y, 7 * isoScale, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawNightAndSpotlight(ctx, lhTop) {
+            const beamOn = mouse.leftDown && battery > 0;
+            const targetScreen = worldToIso(mouse.wx, mouse.wy);
+            const spotRx = light.radius * Math.SQRT2 * isoScale;
+            const spotRy = spotRx * 0.5;
+
+            // Ambient darkness overlay (reduced when lightning flashes!)
+            const darknessOpacity = Math.max(0.08, 0.62 - lightning.flashAlpha * 0.56);
+
+            ctx.save();
+            ctx.fillStyle = `rgba(1, 4, 10, ${darknessOpacity})`;
+            ctx.beginPath();
+            ctx.rect(0, 0, canvas.width, canvas.height);
+
+            // Cut out illuminated holes around Safe Harbor & active Spotlight using evenodd winding
+            const harborScreen = worldToIso(HARBOR.x, HARBOR.y);
+            const harborRx = (HARBOR.radius + 14) * Math.SQRT2 * isoScale;
+            ctx.moveTo(harborScreen.x + harborRx, harborScreen.y);
+            ctx.ellipse(harborScreen.x, harborScreen.y, harborRx, harborRx * 0.5, 0, 0, Math.PI * 2);
+
+            if (beamOn) {
+                ctx.moveTo(targetScreen.x + spotRx * 1.15, targetScreen.y);
+                ctx.ellipse(targetScreen.x, targetScreen.y, spotRx * 1.15, spotRy * 1.15, 0, 0, Math.PI * 2);
+            }
+            ctx.fill('evenodd');
+            ctx.restore();
+
+            // Volumetric Lighthouse Beam Cone when active
+            if (beamOn) {
+                ctx.save();
+                ctx.globalCompositeOperation = 'screen';
+
+                // Ground Illumination Ellipse
+                const spotGrad = ctx.createRadialGradient(
+                    targetScreen.x, targetScreen.y, 2,
+                    targetScreen.x, targetScreen.y, spotRx
+                );
+                spotGrad.addColorStop(0, 'rgba(254, 249, 195, 0.52)');
+                spotGrad.addColorStop(0.7, 'rgba(253, 224, 71, 0.25)');
+                spotGrad.addColorStop(1, 'rgba(253, 224, 71, 0.0)');
+
+                ctx.fillStyle = spotGrad;
+                ctx.beginPath();
+                ctx.ellipse(targetScreen.x, targetScreen.y, spotRx, spotRy, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Volumetric Cone from Lighthouse Lantern to Cursor
+                const coneGrad = ctx.createLinearGradient(lhTop.x, lhTop.y, targetScreen.x, targetScreen.y);
+                coneGrad.addColorStop(0, 'rgba(254, 240, 138, 0.36)');
+                coneGrad.addColorStop(1, 'rgba(254, 240, 138, 0.08)');
+                ctx.fillStyle = coneGrad;
+                ctx.beginPath();
+                ctx.moveTo(lhTop.x, lhTop.y);
+                ctx.lineTo(targetScreen.x - spotRx, targetScreen.y);
+                ctx.lineTo(targetScreen.x + spotRx, targetScreen.y);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        function drawCursorReticles(ctx) {
+            const targetScreen = worldToIso(mouse.wx, mouse.wy);
+            const spotRx = light.radius * Math.SQRT2 * isoScale;
+            const spotRy = spotRx * 0.5;
+            const cannonRx = CANNON_AOE_RADIUS * Math.SQRT2 * isoScale;
+            const cannonRy = cannonRx * 0.5;
+
+            // 1. Outer Light Beam Radius Ring
+            ctx.strokeStyle = (mouse.leftDown && battery > 0)
+                ? 'rgba(253, 224, 71, 0.85)'
+                : 'rgba(226, 232, 240, 0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(targetScreen.x, targetScreen.y, spotRx, spotRy, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 2. Inner Surgical Cannon AoE Ring (30 world units)
+            // Check if any friendly Cargo Ship is currently inside the 30u Cannon AoE to warn the player!
+            let friendlyInBlast = false;
+            for (const s of ships) {
+                if (Math.hypot(s.x - mouse.wx, s.y - mouse.wy) <= CANNON_AOE_RADIUS) {
+                    friendlyInBlast = true;
+                    break;
+                }
+            }
+
+            ctx.strokeStyle = friendlyInBlast
+                ? 'rgba(248, 113, 113, 0.92)'
+                : (cannonCooldown <= 0 ? 'rgba(251, 146, 60, 0.55)' : 'rgba(148, 163, 184, 0.22)');
+            ctx.lineWidth = friendlyInBlast ? 2.2 : 1.2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.ellipse(targetScreen.x, targetScreen.y, cannonRx, cannonRy, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Center Crosshair Dot
+            ctx.fillStyle = friendlyInBlast ? '#ef4444' : '#fde047';
+            ctx.beginPath();
+            ctx.arc(targetScreen.x, targetScreen.y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (friendlyInBlast) {
+                ctx.font = 'bold 10px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#fca5a5';
+                ctx.fillText('⚠ FRIENDLY CARGO IN AOE!', targetScreen.x, targetScreen.y - cannonRy - 6);
+            }
+        }
+
+        function updateHUD() {
+            uiScore.innerText = score;
+            uiSaved.innerText = shipsSaved;
+            uiLost.innerText = shipsLost;
+
+            uiWindSpeed.innerText = `${Math.round(wind.speed)} u/s`;
+            const deg = Math.round((wind.angle * 180) / Math.PI);
+            uiWindDir.innerText = `Gust ${deg}°`;
+
+            uiLightning.innerText = lightning.isIlluminating
+                ? 'STRIKE!'
+                : `${lightning.timer.toFixed(1)}s`;
+
+            const batPct = Math.round((battery / MAX_BATTERY) * 100);
+            uiBatteryFill.style.transform = `scaleX(${battery / MAX_BATTERY})`;
+            uiBatteryText.innerText = `${Math.round(battery)} / ${MAX_BATTERY} (${batPct}%)`;
+
+            if (battery < MAX_BATTERY * 0.22) {
+                uiBatteryFill.classList.add('battery-warning');
+            } else {
+                uiBatteryFill.classList.remove('battery-warning');
+            }
+
+            if (cannonCooldown > 0) {
+                uiCannon.innerText = `${cannonCooldown.toFixed(1)}s`;
+                uiCannon.className = 'text-base font-extrabold text-slate-400 mono';
+            } else {
+                uiCannon.innerText = 'READY';
+                uiCannon.className = 'text-base font-extrabold text-emerald-300 mono';
+            }
+        }
+    </script>
+</body>
+</html>

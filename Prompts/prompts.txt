@@ -1,0 +1,94 @@
+1. The Core Interaction: Mouse Aim & The Regenerative Battery
+The Mechanic: Your mouse cursor is the target of the beam. Holding Left-Click activates the light, draining a battery meter at the bottom of the screen. 
+Releasing Left-Click turns the light off, allowing the battery to slowly regenerate.
+
+The Dilemma: You cannot leave the light on indefinitely. Dragging the beam across the screen wastes precious energy on empty water. 
+You must learn to "pulse" the light—flicking it on only when the cursor is directly over a ship.
+
+Desktop Enhancement: Add Scroll Wheel support to adjust the beam's radius. 
+A wide beam drains the battery incredibly fast but is easy to hit ships with; a pinpoint beam is highly energy-efficient but requires precise mouse tracking.
+
+2. Ship Behavior & The Safe Harbor
+The Mechanic: Ships spawn at the outer edges of the screen. The Safe Harbor is a designated zone (e.g., the bottom center).
+
+The Rule of Light: Ships have their own AI heading toward the harbor, but they only make forward progress when actively illuminated.
+
+The Rule of Darkness: When the light is off them, the storm takes over. 
+An invisible environmental force (a strong crosswind or whirlpool current) immediately begins pushing them sideways toward jagged rocks.
+
+The Player's Role: You aren't dragging them to the harbor; you are giving them the "green light" to sail themselves, while interrupting their drift into danger.
+
+3. The Scoring System: Efficiency as Mastery
+Since the light is regenerative, the challenge isn't running out of light forever—it's running out at the exact moment a ship is about to hit a rock. 
+To tie scoring to light usage, we can implement an Efficiency Multiplier.
+
+How it Works: Every time a ship enters the Safe Harbor, you get base points. 
+However, the game tracks how much battery power you spent on that specific ship.
+
+The Reward: Guiding a ship to safety using minimal light (short, perfectly timed pulses just before they hit rocks) grants a massive "Eco-Rating" score multiplier. 
+Keeping the beam permanently glued to one ship guarantees its safety but destroys your score.
+
+The Tension: Do you play it safe, hold the click, and get a low score? Or do you play on the razor's edge, 
+leaving a ship in the dark until the very last millisecond to maximize your multiplier?
+
+4. Greybox Implementation Checklist
+To prototype this in an engine like Unity or Godot, you only need a few basic primitives:
+
+The Light: A 2D circle or 3D spotlight that snaps to GetMousePosition().
+
+The Battery: A simple float variable that decreases on GetMouseButton(0) and increases when released.
+
+The Ships (Cubes): Give them two states. State 1 (Illuminated): Move Vector.Forward toward the Harbor coordinates. 
+State 2 (Dark): Move Vector.Right according to a global "Wind" vector.
+
+The Hazards (Red Spheres): On collision with a ship, destroy the ship.
+
+5. There will be pirates attacking to the cargo ships. We can have a cannon to attack them by right click. The cannon will also have 3 seconds reload time.
+Additional enemy can be krakens roaming in the sea. They can be deflected by the light zone.
+
+6. Later on we will build this project in Unity. For now, we can simlpy build it web-based.
+
+-----------------------------------------------------------------------------------------------------
+
+1. Let's switch to isometric design,
+2. Include simple assets for lighthouse, whirlpool, pirates and craken.
+3. Increase light's battery capacity.
+4. Decrease diameter of the light source
+
+-----------------------------------------------------------------------------------------------------
+
+1. Increase the safe harbor's area
+2. Double check the following mechanism for cargo ships
+3. Decrease the brightness, make it more like night time with lightinings
+4. With lightinings illuminate the area for short briefs
+
+------------------------------------------------------------------------------------------------------
+Before class prompt 1
+Bug fix:
+	-Cargo ships must follow the last direction of light source.
+	
+New Features:	
+	-The cannon's area of effect has to be decreased
+	-Cannon can do friendly fire to cargo ships
+	-Make user interface objects transparent
+	-Reduce the size of safe harbor and make it circuler
+	-All the moving objects have different varying speeds
+	
+	
+------------------------------------------------------------------------------------------------------
+Before class prompt 2
+
+	Bug fix: Ships continue with their initial direction after light source moves away. This is not an intended feature.
+	The cargo ships have to continue the dirention dictated by light source even after the contact.
+	
+
+	*I want to implement game balance dynamically with using a spread sheet. Here its content:
+		-Varying speed of objects will have a minimum and maximum values in the spread sheet.
+		-Cannon's reload rate will have a value in spead sheet.
+		-Light's regenartion rate will have a value in spread sheet.
+		-Cargo ship, kraken, whirlpool and pirate ships spawn rates will have a value based on seconds.
+		-The length of level will have a time value by seconds.
+		-The ratio of ships to be saved will have a value by percentage.
+		-Density of static hazards like rocks and whirlpools
+		
+	Provide the spreadsheet. Make the game read the file from "C:\GitHub_Desktop\Lighthouse_AI_Game\SpreadSheets" file direction.
