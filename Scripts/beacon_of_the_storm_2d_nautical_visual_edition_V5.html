@@ -1,0 +1,2793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beacon of the Storm: 2D Nautical Harbor Defense</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for reading/exporting GameBalance.xlsx and GameBalance.csv from C:\GitHub_Desktop\Lighthouse_AI_Game\SpreadSheets -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        /* Locked Typography: IM Fell English SC for Display/Headers & Cinzel for all remaining text */
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=IM+Fell+English+SC&display=swap');
+
+        :root {
+            --abyss-deep: #0B192C;
+            --abyss-mid: #16325B;
+            --storm-slate: #1E293B;
+            --brass-gold: #F59E0B;
+            --brass-bright: #FEF08A;
+            --seafoam-teal: #2DD4BF;
+            --corsair-crimson: #DC2626;
+            --eldritch-violet: #7E22CE;
+            --parchment-light: #F8FAFC;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--abyss-deep);
+            color: var(--parchment-light);
+            font-family: 'Cinzel', serif;
+        }
+
+        .font-display-nautical {
+            font-family: 'IM Fell English SC', serif;
+            letter-spacing: 0.06em;
+        }
+
+        .font-nautical {
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.05em;
+        }
+
+        .mono {
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: none;
+        }
+
+        /* Non-blocking transparent HUD layer */
+        #ui-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 14px 20px;
+        }
+
+        /* Ultra-transparent Nautical Brass & Sea-Glass HUD panels */
+        .hud-panel {
+            background: rgba(4, 12, 24, 0.22);
+            border: 1px solid rgba(245, 158, 11, 0.32);
+            box-shadow: inset 0 0 18px rgba(45, 212, 191, 0.08), 0 4px 20px rgba(0, 0, 0, 0.24);
+            border-radius: 12px;
+            padding: 10px 16px;
+            pointer-events: none;
+        }
+
+        .hud-btn {
+            pointer-events: auto;
+            cursor: pointer;
+            background: rgba(11, 25, 44, 0.58);
+            border: 1px solid rgba(245, 158, 11, 0.55);
+            color: #FEF3C7;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            transition: all 0.15s ease;
+        }
+
+        .hud-btn:hover {
+            background: rgba(217, 119, 6, 0.48);
+            border-color: rgba(254, 240, 138, 0.9);
+            transform: translateY(-1px);
+        }
+
+        .battery-bar-outer {
+            width: min(440px, 72vw);
+            height: 14px;
+            background: rgba(3, 9, 20, 0.48);
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #battery-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.9), rgba(254, 240, 138, 0.95), rgba(254, 249, 195, 1));
+            transform-origin: left;
+            transition: transform 0.05s linear;
+        }
+
+        .battery-overheat {
+            background: linear-gradient(90deg, rgba(220, 38, 38, 0.92), rgba(248, 113, 113, 0.98)) !important;
+        }
+
+        .interactive-panel {
+            pointer-events: auto;
+            background: rgba(7, 22, 44, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(245, 158, 11, 0.48);
+            border-radius: 12px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+        }
+
+        .sheet-input {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            color: #F8FAFC;
+            border-radius: 6px;
+            padding: 2px 6px;
+            width: 68px;
+            font-size: 11px;
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .sheet-input:focus {
+            outline: none;
+            border-color: #FEF08A;
+            box-shadow: 0 0 0 1px rgba(254, 240, 138, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Hidden File Input for loading GameBalance.xlsx or GameBalance.csv -->
+    <input type="file" id="spreadsheet-file-input" accept=".xlsx,.xls,.csv,.tsv" class="hidden" />
+
+    <!-- Hidden File Input for batch-loading the 10 ChatGPT DALL-E images from C:\GitHub_Desktop\Lighthouse_AI_Game\Assets -->
+    <input type="file" id="assets-file-input" accept="image/*" multiple class="hidden" />
+
+    <!-- Ultra-Transparent Non-Blocking Nautical HUD -->
+    <div id="ui-layer">
+        <!-- Top Row -->
+        <div class="flex flex-wrap justify-between items-start gap-3">
+            <!-- Left: Score, Eco-Rating, Level Timer & Save Ratio Target -->
+            <div class="hud-panel flex flex-col gap-1 min-w-[280px]">
+                <div class="flex items-baseline justify-between gap-4">
+                    <span class="font-display-nautical text-sm uppercase text-amber-300">Harbor Ledger</span>
+                    <span id="ui-score" class="text-2xl font-extrabold text-white mono">0</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-100">
+                    <span>Last Eco-Rating:</span>
+                    <span id="ui-eco" class="font-bold text-amber-300 mono">S+ (5.0x)</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-200 pt-1 border-t border-amber-400/20">
+                    <span>Docked: <strong id="ui-saved" class="text-teal-300 mono">0</strong></span>
+                    <span>Sunk/Lost: <strong id="ui-lost" class="text-rose-400 mono">0</strong></span>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-100 pt-1 border-t border-amber-400/20">
+                    <span>Save Ratio: <strong id="ui-save-ratio" class="text-teal-300 mono">100% / 65%</strong></span>
+                    <span>Shift Timer: <strong id="ui-level-timer" class="text-amber-300 mono">180.0s</strong></span>
+                </div>
+            </div>
+
+            <!-- Center: Storm Wind, Beam Radius, Storm Lightning, Balance & Assets Status -->
+            <div class="hud-panel flex items-center gap-4 px-4 py-2">
+                <div class="flex flex-col">
+                    <span class="font-display-nautical text-xs uppercase text-teal-300">Storm Crosswind</span>
+                    <div class="flex items-center gap-2">
+                        <span id="ui-wind-speed" class="text-xs font-bold text-white mono">24 u/s</span>
+                        <span id="ui-wind-dir" class="text-[11px] text-teal-200 mono">SE Gust</span>
+                    </div>
+                </div>
+                <div class="h-6 w-px bg-amber-400/25"></div>
+                <div class="flex flex-col">
+                    <span class="font-display-nautical text-xs uppercase text-amber-300">Fresnel Lens</span>
+                    <span id="ui-beam-radius" class="text-xs font-bold text-amber-200 mono">28u (Scroll)</span>
+                </div>
+                <div class="h-6 w-px bg-amber-400/25"></div>
+                <div class="flex flex-col">
+                    <span class="font-display-nautical text-xs uppercase text-indigo-300">Squall Flash</span>
+                    <span id="ui-lightning" class="text-xs font-bold text-indigo-200 mono">Charging</span>
+                </div>
+                <div class="h-6 w-px bg-amber-400/25 hidden md:block"></div>
+                <div class="hidden md:flex flex-col">
+                    <span class="font-display-nautical text-xs uppercase text-emerald-300">Assets &amp; Sheet</span>
+                    <span id="ui-sheet-status" class="text-[11px] font-bold text-emerald-200 mono truncate max-w-[185px]">Probing Assets...</span>
+                </div>
+            </div>
+
+            <!-- Right: Defense Cannon Status & Action Buttons -->
+            <div class="flex flex-col items-end gap-2">
+                <div class="hud-panel flex flex-col items-end gap-1 min-w-[265px]">
+                    <div class="flex items-center justify-between w-full gap-3">
+                        <span class="font-display-nautical text-sm uppercase text-rose-300">Harbor Battery</span>
+                        <span id="ui-cannon" class="text-sm font-extrabold text-teal-300 mono">READY (R-CLICK)</span>
+                    </div>
+                    <div class="text-[11px] text-slate-200">Surgical Mortar AoE: <span class="text-amber-300 mono">30u</span> (<span id="ui-cannon-reload-spec" class="mono">3.0s</span> Reload)</div>
+                    <div class="text-[10px] text-rose-300 font-bold">⚠ Friendly Fire Sinks Cargo Vessels (-200)</div>
+                </div>
+
+                <!-- Interactive Top-Right Action Buttons -->
+                <div class="flex flex-wrap items-center justify-end gap-1.5">
+                    <button id="btn-load-assets" class="hud-btn" title="Select the 10 ChatGPT Image PNGs from C:\GitHub_Desktop\Lighthouse_AI_Game\Assets">🖼️ Load Assets (1-10)</button>
+                    <button id="btn-sheet" class="hud-btn" title="Open C:\GitHub_Desktop\Lighthouse_AI_Game\SpreadSheets Manager">📊 Balance Sheet</button>
+                    <button id="btn-load-file" class="hud-btn" title="Load GameBalance.xlsx or GameBalance.csv">📂 Load .XLSX/.CSV</button>
+                    <button id="btn-help" class="hud-btn" title="Toggle Captain's Guide">? Guide</button>
+                    <button id="btn-restart" class="hud-btn" title="Reset Ocean & Score">↻ Restart Shift</button>
+                </div>
+
+                <!-- Collapsible Dynamic Spreadsheet Balance Editor -->
+                <div id="sheet-drawer" class="interactive-panel hidden w-[460px] max-w-[94vw] p-3.5 text-[11px] text-slate-200 leading-snug space-y-2.5 max-h-[76vh] overflow-y-auto">
+                    <div class="flex items-center justify-between border-b border-amber-400/20 pb-2">
+                        <div>
+                            <div class="font-display-nautical text-sm text-amber-300 uppercase">Dynamic Spreadsheet Game Balance</div>
+                            <div class="text-[10px] text-slate-400 mono break-all">Path: C:\GitHub_Desktop\Lighthouse_AI_Game\SpreadSheets\GameBalance.xlsx</div>
+                        </div>
+                        <button id="btn-close-sheet" class="hud-btn px-2 py-1 text-[10px]">✕</button>
+                    </div>
+
+                    <div id="sheet-source-banner" class="text-[10px] bg-slate-900/80 border border-amber-400/30 rounded px-2.5 py-1.5 text-amber-100">
+                        Assets Path: <code class="mono text-teal-300">C:\GitHub_Desktop\Lighthouse_AI_Game\Assets\ChatGPT Image Oct 27, 2026, 03_43_02 AM-1..10.png</code>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-amber-400/20 text-[10px] uppercase text-amber-300/90 mono">
+                                    <th class="py-1 pr-2">Parameter_Key</th>
+                                    <th class="py-1 px-1 text-right">Min_Value</th>
+                                    <th class="py-1 px-1 text-right">Max_Value</th>
+                                    <th class="py-1 pl-2">Unit</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sheet-table-body" class="divide-y divide-white/10 text-[11px]"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-400/20">
+                        <div class="flex items-center gap-1.5">
+                            <button id="btn-export-xlsx" class="hud-btn">⬇ Export .XLSX</button>
+                            <button id="btn-export-csv" class="hud-btn">⬇ Export .CSV</button>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button id="btn-retry-fetch" class="hud-btn">🔄 Re-Read Paths</button>
+                            <button id="btn-apply-sheet" class="hud-btn bg-teal-700/60 border-teal-300/60">✓ Apply &amp; Rebuild Hazards</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Collapsible Transparent Tactical Guide -->
+                <div id="help-drawer" class="hud-panel hidden max-w-[340px] text-[11px] text-slate-100 leading-relaxed space-y-1.5">
+                    <div class="font-display-nautical text-sm text-amber-300 uppercase border-b border-amber-400/20 pb-1">Lighthouse Keeper's Manual</div>
+                    <div><strong class="text-amber-300">Persistent Light Course Lock (Hold L-Click):</strong> Touching a cargo ship with the beam rotates its hull and locks its heading (<code class="text-teal-200">lastLightDir</code>) toward the exiting light source.</div>
+                    <div><strong class="text-teal-300">Moonlit Sea-Chart Mode:</strong> High-visibility ambient lighting keeps rocks, whirlpools, and ships legible across the entire chart while your Fresnel beam acts as a golden activation spotlight.</div>
+                    <div><strong class="text-emerald-300">External Assets (1–10):</strong> Auto-loads <code class="text-amber-200">ChatGPT Image Oct 27, 2026, 03_43_02 AM-1.png</code> through <code class="text-amber-200">-10.png</code> from <code class="text-teal-200">Assets/</code> (or click <strong>🖼️ Load Assets (1-10)</strong> to select them directly).</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Regenerative Lighthouse Battery Bar -->
+        <div class="flex flex-col items-center mb-1">
+            <div class="hud-panel flex flex-col items-center gap-1.5 py-2 px-5">
+                <div class="flex justify-between w-full text-[11px] font-bold uppercase tracking-wider text-slate-100">
+                    <span id="ui-battery-label" class="font-display-nautical text-sm text-amber-200">Fresnel Beacon Capacitor</span>
+                    <span id="ui-battery-text" class="mono text-amber-300">200 / 200 (100%)</span>
+                </div>
+                <div class="battery-bar-outer">
+                    <div id="battery-fill"></div>
+                </div>
+                <div class="flex flex-wrap justify-between w-full text-[10px] text-slate-200 gap-2">
+                    <span>L-Click Sweep: Rotate &amp; Lock Ship Course (<code class="mono text-teal-300">lastLightDir</code> persists!)</span>
+                    <span>Scroll: Lens Radius (14u–65u)</span>
+                    <span>R-Click: Surgical Mortar (30u AoE)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            // ============================================================================
+            // 1. DOM REFERENCES & 2D NAUTICAL WORLD CONFIGURATION
+            // ============================================================================
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            const uiScore = document.getElementById('ui-score');
+            const uiEco = document.getElementById('ui-eco');
+            const uiSaved = document.getElementById('ui-saved');
+            const uiLost = document.getElementById('ui-lost');
+            const uiSaveRatio = document.getElementById('ui-save-ratio');
+            const uiLevelTimer = document.getElementById('ui-level-timer');
+            const uiWindSpeed = document.getElementById('ui-wind-speed');
+            const uiWindDir = document.getElementById('ui-wind-dir');
+            const uiBeamRadius = document.getElementById('ui-beam-radius');
+            const uiLightning = document.getElementById('ui-lightning');
+            const uiSheetStatus = document.getElementById('ui-sheet-status');
+            const uiCannon = document.getElementById('ui-cannon');
+            const uiCannonReloadSpec = document.getElementById('ui-cannon-reload-spec');
+            const uiBatteryLabel = document.getElementById('ui-battery-label');
+            const uiBatteryText = document.getElementById('ui-battery-text');
+            const uiBatteryFill = document.getElementById('battery-fill');
+
+            const btnRestart = document.getElementById('btn-restart');
+            const btnHelp = document.getElementById('btn-help');
+            const helpDrawer = document.getElementById('help-drawer');
+            const btnSheet = document.getElementById('btn-sheet');
+            const btnCloseSheet = document.getElementById('btn-close-sheet');
+            const sheetDrawer = document.getElementById('sheet-drawer');
+            const sheetTableBody = document.getElementById('sheet-table-body');
+            const sheetSourceBanner = document.getElementById('sheet-source-banner');
+            const btnLoadFile = document.getElementById('btn-load-file');
+            const fileInput = document.getElementById('spreadsheet-file-input');
+            const btnLoadAssets = document.getElementById('btn-load-assets');
+            const assetsFileInput = document.getElementById('assets-file-input');
+            const btnExportXlsx = document.getElementById('btn-export-xlsx');
+            const btnExportCsv = document.getElementById('btn-export-csv');
+            const btnRetryFetch = document.getElementById('btn-retry-fetch');
+            const btnApplySheet = document.getElementById('btn-apply-sheet');
+
+            // Pure 2D Top-Down Coordinate Space (-500 to +500 on X and Y, scaled to screen)
+            const WORLD_LIMIT = 500;
+            let worldScale = 1.0;
+            let originX = window.innerWidth * 0.5;
+            let originY = window.innerHeight * 0.5;
+
+            // Compact Circular Safe Harbor (45 world units radius) in Lower-Right Quadrant
+            const HARBOR = {
+                x: 240,
+                y: 165,
+                radius: 45
+            };
+
+            // Lighthouse Promontory perched just behind the Safe Harbor breakwater
+            const LIGHTHOUSE = {
+                x: 315,
+                y: 215
+            };
+
+            // ============================================================================
+            // 2. EXTERNAL ASSET LOADER ("C:\GitHub_Desktop\Lighthouse_AI_Game\Assets")
+            //    Ordered strictly by Art_Direction_Guide.md (1 through 10)
+            // ============================================================================
+            const ASSETS_DIR_WINDOWS = 'C:\\GitHub_Desktop\\Lighthouse_AI_Game\\Assets';
+            const CHATGPT_BASE_PREFIX = 'ChatGPT Image Oct 27, 2026, 03_43_02 AM-';
+
+            // Exact mapping of index 1..10 to the markdown order
+            const ASSET_MANIFEST = [
+                { index: 1, key: 'cutter', label: 'Swift Cutter', isTile: false, isShip: true },
+                { index: 2, key: 'brig', label: 'Merchant Brig', isTile: false, isShip: true },
+                { index: 3, key: 'galleon', label: 'Heavy Galleon', isTile: false, isShip: true },
+                { index: 4, key: 'pirate', label: 'Pirate Raider', isTile: false, isShip: true },
+                { index: 5, key: 'kraken', label: 'The Kraken', isTile: false, isShip: false },
+                { index: 6, key: 'rock', label: 'Jagged Basalt Reef', isTile: false, isShip: false },
+                { index: 7, key: 'whirlpool', label: 'Abyssal Whirlpool', isTile: false, isShip: false },
+                { index: 8, key: 'lighthouseIsland', label: 'Lighthouse Promontory', isTile: false, isShip: false },
+                { index: 9, key: 'safeHarbor', label: 'Safe Harbor Breakwater', isTile: false, isShip: false },
+                { index: 10, key: 'oceanTile', label: 'Moonlit Ocean Tile', isTile: true, isShip: false }
+            ];
+
+            const SPRITES = {
+                waterPattern: null,
+                cutter: null,
+                brig: null,
+                galleon: null,
+                pirate: null,
+                kraken: null,
+                rock: null,
+                rockVariants: [],
+                whirlpool: null,
+                lighthouseIsland: null,
+                safeHarbor: null,
+                oceanTile: null,
+                externalLoadedCount: 0
+            };
+
+            function createOffscreenCanvas(w, h) {
+                const c = document.createElement('canvas');
+                c.width = w;
+                c.height = h;
+                return c;
+            }
+
+            // Smart processor: strips any remaining solid white (#FFFFFF) background from DALL-E PNGs
+            // and auto-crops to the sprite center so top-down rotation is balanced.
+            function prepareExternalSpriteCanvas(img, spec) {
+                const w = img.naturalWidth || img.width || 256;
+                const h = img.naturalHeight || img.height || 256;
+
+                if (spec.isTile) {
+                    const tileCanvas = createOffscreenCanvas(256, 256);
+                    const tg = tileCanvas.getContext('2d');
+                    tg.drawImage(img, 0, 0, 256, 256);
+                    return tileCanvas;
+                }
+
+                const work = createOffscreenCanvas(w, h);
+                const wg = work.getContext('2d');
+                wg.drawImage(img, 0, 0);
+
+                try {
+                    const imgData = wg.getImageData(0, 0, w, h);
+                    const data = imgData.data;
+
+                    // Check if corner pixels have a near-white background (#F0F0F0..#FFFFFF)
+                    const corners = [
+                        0,
+                        (w - 1) * 4,
+                        (h - 1) * w * 4,
+                        ((h - 1) * w + (w - 1)) * 4
+                    ];
+                    let whiteCorners = 0;
+                    for (let c = 0; c < corners.length; c++) {
+                        const idx = corners[c];
+                        if (data[idx + 3] > 200 && data[idx] > 235 && data[idx + 1] > 235 && data[idx + 2] > 235) {
+                            whiteCorners++;
+                        }
+                    }
+
+                    if (whiteCorners >= 2) {
+                        // Strip near-white pixels into transparent alpha & feather edges
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i];
+                            const g = data[i + 1];
+                            const b = data[i + 2];
+                            if (r > 242 && g > 242 && b > 242) {
+                                data[i + 3] = 0;
+                            } else if (r > 225 && g > 225 && b > 225 && Math.abs(r - g) < 10 && Math.abs(g - b) < 10) {
+                                const lightness = (r + g + b) / 3;
+                                data[i + 3] = Math.round(data[i + 3] * Math.max(0, (242 - lightness) / 17));
+                            }
+                        }
+                        wg.putImageData(imgData, 0, 0);
+                    }
+
+                    // Compute non-transparent bounding box for clean centering
+                    let minX = w, minY = h, maxX = 0, maxY = 0, found = false;
+                    for (let y = 0; y < h; y++) {
+                        for (let x = 0; x < w; x++) {
+                            const a = data[(y * w + x) * 4 + 3];
+                            if (a > 20) {
+                                if (x < minX) minX = x;
+                                if (x > maxX) maxX = x;
+                                if (y < minY) minY = y;
+                                if (y > maxY) maxY = y;
+                                found = true;
+                            }
+                        }
+                    }
+
+                    if (found) {
+                        const bw = Math.max(1, maxX - minX + 1);
+                        const bh = Math.max(1, maxY - minY + 1);
+                        const outW = spec.isShip ? 128 : 160;
+                        const outH = spec.isShip ? 96 : 160;
+                        const out = createOffscreenCanvas(outW, outH);
+                        const og = out.getContext('2d');
+                        const pad = 0.88;
+                        const scale = Math.min((outW * pad) / bw, (outH * pad) / bh);
+                        const drawW = bw * scale;
+                        const drawH = bh * scale;
+                        og.drawImage(
+                            work,
+                            minX, minY, bw, bh,
+                            (outW - drawW) * 0.5, (outH - drawH) * 0.5, drawW, drawH
+                        );
+                        return out;
+                    }
+                } catch (secErr) {
+                    // If file:// security prevents getImageData, return scaled image directly
+                }
+
+                const fallbackOut = createOffscreenCanvas(spec.isShip ? 128 : 160, spec.isShip ? 96 : 160);
+                const fg = fallbackOut.getContext('2d');
+                fg.drawImage(img, 0, 0, fallbackOut.width, fallbackOut.height);
+                return fallbackOut;
+            }
+
+            function bindLoadedAssetToSlot(img, spec) {
+                const processed = prepareExternalSpriteCanvas(img, spec);
+                SPRITES[spec.key] = processed;
+                if (spec.key === 'oceanTile') {
+                    SPRITES.waterPattern = ctx.createPattern(processed, 'repeat');
+                }
+                if (spec.key === 'rock') {
+                    SPRITES.rockVariants = [processed, processed, processed];
+                }
+            }
+
+            function tryLoadSingleExternalAsset(spec) {
+                const fileName = `${CHATGPT_BASE_PREFIX}${spec.index}.png`;
+                const encodedName = encodeURIComponent(fileName);
+                const candidatePaths = [
+                    `./Assets/${fileName}`,
+                    `./Assets/${encodedName}`,
+                    `Assets/${fileName}`,
+                    `./${fileName}`
+                ];
+                if (window.location.protocol === 'file:') {
+                    candidatePaths.unshift(
+                        `file:///C:/GitHub_Desktop/Lighthouse_AI_Game/Assets/${encodedName}`,
+                        `file:///C:/GitHub_Desktop/Lighthouse_AI_Game/Assets/${fileName}`
+                    );
+                }
+
+                let idx = 0;
+                function attemptNext() {
+                    if (idx >= candidatePaths.length) return;
+                    const img = new Image();
+                    img.onload = () => {
+                        bindLoadedAssetToSlot(img, spec);
+                        SPRITES.externalLoadedCount++;
+                        if (uiSheetStatus) {
+                            uiSheetStatus.innerText = `Assets: ${SPRITES.externalLoadedCount}/10 Loaded`;
+                        }
+                    };
+                    img.onerror = () => {
+                        idx++;
+                        attemptNext();
+                    };
+                    img.src = candidatePaths[idx];
+                }
+                attemptNext();
+            }
+
+            function autoProbeExternalAssetsFolder() {
+                SPRITES.externalLoadedCount = 0;
+                for (let i = 0; i < ASSET_MANIFEST.length; i++) {
+                    tryLoadSingleExternalAsset(ASSET_MANIFEST[i]);
+                }
+            }
+
+            // ============================================================================
+            // 3. BUILT-IN CRISP VECTOR SEA-CHART FALLBACK SPRITES (Option B Palette)
+            //    Ensures instant rendering at frame 0 while external PNGs load
+            // ============================================================================
+            function buildWaterTexture() {
+                const size = 256;
+                const c = createOffscreenCanvas(size, size);
+                const g = c.getContext('2d');
+
+                // Moonlit Sea-Chart Base (#0B192C boosted for high readability)
+                g.fillStyle = '#0B192C';
+                g.fillRect(0, 0, size, size);
+
+                // Trench-Navy & Storm-Slate Geometric Wave Crest Lines (#16325B & #1E293B)
+                for (let i = 0; i < 32; i++) {
+                    const x = (i * 47) % size;
+                    const y = (i * 73) % size;
+                    const w = 48 + (i % 5) * 16;
+                    g.strokeStyle = i % 2 === 0 ? '#16325B' : '#1E293B';
+                    g.lineWidth = 2.2;
+                    for (let dx = -size; dx <= size; dx += size) {
+                        for (let dy = -size; dy <= size; dy += size) {
+                            g.beginPath();
+                            g.moveTo(x + dx, y + dy);
+                            g.quadraticCurveTo(x + dx + w * 0.5, y + dy - 7, x + dx + w, y + dy);
+                            g.stroke();
+                        }
+                    }
+                }
+
+                // Seafoam flecks (#E0F2FE)
+                g.fillStyle = 'rgba(224, 242, 254, 0.12)';
+                for (let i = 0; i < 55; i++) {
+                    const px = (i * 97) % size;
+                    const py = (i * 53) % size;
+                    g.beginPath();
+                    g.arc(px, py, 1.4, 0, Math.PI * 2);
+                    g.fill();
+                }
+
+                SPRITES.waterPattern = ctx.createPattern(c, 'repeat');
+            }
+
+            function buildShipSprite(config) {
+                const w = 128;
+                const h = 96;
+                const c = createOffscreenCanvas(w, h);
+                const g = c.getContext('2d');
+                g.translate(w * 0.5, h * 0.5);
+
+                const L = config.length;
+                const B = config.beam;
+
+                // Bold Dark Ink Outline (Bad North / FTL Crisp Vector Style)
+                g.fillStyle = 'rgba(3, 9, 20, 0.55)';
+                g.beginPath();
+                g.moveTo(L + 6, 0);
+                g.bezierCurveTo(L * 0.4, B + 5, -L * 0.7, B + 4, -L - 3, B * 0.5);
+                g.lineTo(-L - 3, -B * 0.5);
+                g.bezierCurveTo(-L * 0.7, -B - 4, L * 0.4, -B - 5, L + 6, 0);
+                g.fill();
+
+                // Bowsprit
+                g.strokeStyle = config.trimColor;
+                g.lineWidth = 3;
+                g.beginPath();
+                g.moveTo(L - 4, 0);
+                g.lineTo(L + 15, 0);
+                g.stroke();
+
+                // Hull (#92400E warm cedar/oak for cargo, #18181B pitch-black for pirate)
+                g.fillStyle = config.hullLight;
+                g.strokeStyle = '#030914';
+                g.lineWidth = 2.6;
+                g.beginPath();
+                g.moveTo(L + 2, 0);
+                g.bezierCurveTo(L * 0.45, B, -L * 0.65, B, -L, B * 0.58);
+                g.lineTo(-L, -B * 0.58);
+                g.bezierCurveTo(-L * 0.65, -B, L * 0.45, -B, L + 2, 0);
+                g.closePath();
+                g.fill();
+                g.stroke();
+
+                // Accent Gunwale Trim
+                g.strokeStyle = config.accentColor;
+                g.lineWidth = 1.8;
+                g.stroke();
+
+                // Inner Deck
+                g.fillStyle = config.deckColor;
+                g.beginPath();
+                g.moveTo(L - 4, 0);
+                g.bezierCurveTo(L * 0.38, B * 0.74, -L * 0.6, B * 0.74, -L + 4, B * 0.42);
+                g.lineTo(-L + 4, -B * 0.42);
+                g.bezierCurveTo(-L * 0.6, -B * 0.74, L * 0.38, -B * 0.74, L - 4, 0);
+                g.closePath();
+                g.fill();
+
+                // Stern Cabin & Cargo Crates
+                g.fillStyle = config.hullDark;
+                g.strokeStyle = config.trimColor;
+                g.lineWidth = 1.5;
+                g.fillRect(-L + 3, -B * 0.48, L * 0.42, B * 0.96);
+                g.strokeRect(-L + 3, -B * 0.48, L * 0.42, B * 0.96);
+
+                if (config.cargoCrates) {
+                    g.fillStyle = '#F59E0B';
+                    g.fillRect(-4, -B * 0.36, 9, B * 0.72);
+                    g.strokeRect(-4, -B * 0.36, 9, B * 0.72);
+                }
+
+                // Billowing Canvas Sails (#FEF3C7 cream or #DC2626 blood crimson)
+                for (let m = 0; m < config.masts.length; m++) {
+                    const mx = config.masts[m].x;
+                    const sw = config.masts[m].span;
+
+                    g.strokeStyle = '#030914';
+                    g.lineWidth = 2.6;
+                    g.beginPath();
+                    g.moveTo(mx, -sw);
+                    g.lineTo(mx, sw);
+                    g.stroke();
+
+                    g.fillStyle = config.sailColor;
+                    g.strokeStyle = '#030914';
+                    g.lineWidth = 2.0;
+                    g.beginPath();
+                    g.moveTo(mx, -sw);
+                    g.quadraticCurveTo(mx + 11, 0, mx, sw);
+                    g.quadraticCurveTo(mx + 4, 0, mx, -sw);
+                    g.closePath();
+                    g.fill();
+                    g.stroke();
+
+                    if (config.isPirate && m === 0) {
+                        g.fillStyle = '#F8FAFC';
+                        g.beginPath();
+                        g.arc(mx + 5.5, 0, 3.2, 0, Math.PI * 2);
+                        g.fill();
+                    }
+
+                    g.fillStyle = config.trimColor;
+                    g.beginPath();
+                    g.arc(mx, 0, 2.8, 0, Math.PI * 2);
+                    g.fill();
+                }
+
+                return c;
+            }
+
+            function buildRockSprites() {
+                SPRITES.rockVariants = [];
+                for (let v = 0; v < 3; v++) {
+                    const sz = 120;
+                    const c = createOffscreenCanvas(sz, sz);
+                    const g = c.getContext('2d');
+                    g.translate(sz * 0.5, sz * 0.5);
+
+                    // Turquoise shallow-reef ring (#2DD4BF)
+                    g.fillStyle = 'rgba(45, 212, 191, 0.22)';
+                    g.beginPath();
+                    g.arc(0, 0, 42, 0, Math.PI * 2);
+                    g.fill();
+
+                    // Bright crashing seafoam collar (#E0F2FE)
+                    g.fillStyle = '#E0F2FE';
+                    g.strokeStyle = '#030914';
+                    g.lineWidth = 2;
+                    g.beginPath();
+                    g.arc(0, 0, 33, 0, Math.PI * 2);
+                    g.fill();
+                    g.stroke();
+
+                    // Cold Basalt Grey (#475569) geometric crags
+                    const clusters = [
+                        { ox: -5, oy: -4, r: 20, sides: 7 },
+                        { ox: 10, oy: 6, r: 15, sides: 6 },
+                        { ox: -10, oy: 10, r: 12, sides: 5 }
+                    ];
+
+                    clusters.forEach((cl, idx) => {
+                        g.save();
+                        g.translate(cl.ox, cl.oy);
+                        g.rotate(v * 1.1 + idx * 0.7);
+                        g.fillStyle = '#475569';
+                        g.strokeStyle = '#030914';
+                        g.lineWidth = 2.2;
+                        g.beginPath();
+                        const pts = [];
+                        for (let i = 0; i < cl.sides; i++) {
+                            const a = (i / cl.sides) * Math.PI * 2;
+                            const rad = cl.r * (0.8 + ((i * 37 + v * 13) % 10) * 0.03);
+                            pts.push({ x: Math.cos(a) * rad, y: Math.sin(a) * rad });
+                            if (i === 0) g.moveTo(pts[i].x, pts[i].y);
+                            else g.lineTo(pts[i].x, pts[i].y);
+                        }
+                        g.closePath();
+                        g.fill();
+                        g.stroke();
+
+                        g.fillStyle = '#94A3B8';
+                        g.beginPath();
+                        g.moveTo(0, 0);
+                        g.lineTo(pts[0].x, pts[0].y);
+                        g.lineTo(pts[1].x, pts[1].y);
+                        g.closePath();
+                        g.fill();
+                        g.restore();
+                    });
+
+                    SPRITES.rockVariants.push(c);
+                }
+            }
+
+            function buildWhirlpoolSprite() {
+                const sz = 180;
+                const c = createOffscreenCanvas(sz, sz);
+                const g = c.getContext('2d');
+                g.translate(sz * 0.5, sz * 0.5);
+
+                const eyeGrad = g.createRadialGradient(0, 0, 4, 0, 0, 82);
+                eyeGrad.addColorStop(0, '#030914');
+                eyeGrad.addColorStop(0.3, '#07162C');
+                eyeGrad.addColorStop(0.7, 'rgba(45, 212, 191, 0.35)');
+                eyeGrad.addColorStop(1, 'rgba(45, 212, 191, 0)');
+                g.fillStyle = eyeGrad;
+                g.beginPath();
+                g.arc(0, 0, 82, 0, Math.PI * 2);
+                g.fill();
+
+                for (let arm = 0; arm < 4; arm++) {
+                    const baseAngle = (arm / 4) * Math.PI * 2;
+                    g.strokeStyle = arm % 2 === 0 ? '#E0F2FE' : '#2DD4BF';
+                    g.lineWidth = 2.8;
+                    g.beginPath();
+                    for (let t = 0; t < 42; t++) {
+                        const r = 8 + t * 1.65;
+                        const a = baseAngle + t * 0.14;
+                        const px = Math.cos(a) * r;
+                        const py = Math.sin(a) * r;
+                        if (t === 0) g.moveTo(px, py);
+                        else g.lineTo(px, py);
+                    }
+                    g.stroke();
+                }
+
+                SPRITES.whirlpool = c;
+            }
+
+            function initAllSprites() {
+                buildWaterTexture();
+
+                // 1. Swift Cutter (#92400E Cedar, #2DD4BF Teal Stripe, 1 Cream Sail #FEF3C7)
+                SPRITES.cutter = buildShipSprite({
+                    length: 20,
+                    beam: 8.5,
+                    hullDark: '#78350F',
+                    hullLight: '#92400E',
+                    deckColor: '#B45309',
+                    trimColor: '#F59E0B',
+                    accentColor: '#2DD4BF',
+                    sailColor: '#FEF3C7',
+                    cargoCrates: false,
+                    masts: [{ x: 3, span: 12 }]
+                });
+
+                // 2. Merchant Brig (#92400E Oak Hull, 2 Cream Sails #FEF3C7)
+                SPRITES.brig = buildShipSprite({
+                    length: 25,
+                    beam: 11,
+                    hullDark: '#78350F',
+                    hullLight: '#92400E',
+                    deckColor: '#D97706',
+                    trimColor: '#F59E0B',
+                    accentColor: '#FDE047',
+                    sailColor: '#FEF3C7',
+                    cargoCrates: true,
+                    masts: [{ x: 8, span: 14 }, { x: -6, span: 12 }]
+                });
+
+                // 3. Heavy Galleon (#92400E Fortress Hull, #F59E0B Brass Trim, 3 Sails #FEF3C7)
+                SPRITES.galleon = buildShipSprite({
+                    length: 31,
+                    beam: 13.5,
+                    hullDark: '#451A03',
+                    hullLight: '#92400E',
+                    deckColor: '#B45309',
+                    trimColor: '#F59E0B',
+                    accentColor: '#2DD4BF',
+                    sailColor: '#FEF3C7',
+                    cargoCrates: true,
+                    masts: [{ x: 13, span: 15 }, { x: 0, span: 17 }, { x: -12, span: 13 }]
+                });
+
+                // 4. Pirate Raider (#18181B Charred Hull, #DC2626 Blood Crimson Sails)
+                SPRITES.pirate = buildShipSprite({
+                    length: 24,
+                    beam: 10,
+                    hullDark: '#09090B',
+                    hullLight: '#18181B',
+                    deckColor: '#27272A',
+                    trimColor: '#F97316',
+                    accentColor: '#DC2626',
+                    sailColor: '#DC2626',
+                    isPirate: true,
+                    cargoCrates: false,
+                    masts: [{ x: 7, span: 15 }, { x: -7, span: 12 }]
+                });
+
+                buildRockSprites();
+                buildWhirlpoolSprite();
+
+                // Automatically probe C:\GitHub_Desktop\Lighthouse_AI_Game\Assets for the 10 ChatGPT PNGs
+                autoProbeExternalAssetsFolder();
+            }
+
+            // ============================================================================
+            // 4. DYNAMIC SPREADSHEET GAME BALANCE SYSTEM
+            //    Target Directory: C:\GitHub_Desktop\Lighthouse_AI_Game\SpreadSheets
+            // ============================================================================
+            const SPREADSHEET_DIR_WINDOWS = 'C:\\GitHub_Desktop\\Lighthouse_AI_Game\\SpreadSheets';
+
+            function getCandidateUrls() {
+                const urls = [
+                    './SpreadSheets/GameBalance.xlsx',
+                    './SpreadSheets/GameBalance.csv',
+                    './GameBalance.xlsx',
+                    './GameBalance.csv'
+                ];
+                if (window.location.protocol === 'file:') {
+                    urls.unshift(
+                        'file:///C:/GitHub_Desktop/Lighthouse_AI_Game/SpreadSheets/GameBalance.xlsx',
+                        'file:///C:/GitHub_Desktop/Lighthouse_AI_Game/SpreadSheets/GameBalance.csv'
+                    );
+                }
+                return urls;
+            }
+
+            const BALANCE_ROWS = [
+                { key: 'CargoShip_Speed', min: 24, max: 56, unit: 'u/s', desc: 'Min/Max speed of Cargo Ships across classes' },
+                { key: 'PirateShip_Speed', min: 38, max: 68, unit: 'u/s', desc: 'Min/Max speed of Pirate Raiders' },
+                { key: 'Kraken_Speed', min: 18, max: 36, unit: 'u/s', desc: 'Min/Max roaming speed of Kraken monsters' },
+                { key: 'StormWind_Speed', min: 14, max: 32, unit: 'u/s', desc: 'Min/Max speed of environmental Storm Crosswinds' },
+                { key: 'WhirlpoolPull_Speed', min: 20, max: 45, unit: 'u/s', desc: 'Min/Max inward suction speed of Whirlpools' },
+                { key: 'Cannon_Reload_Time', min: 3.0, max: 3.0, unit: 'sec', desc: 'Defense Cannon reload cooldown duration' },
+                { key: 'Light_Regen_Rate', min: 22.0, max: 22.0, unit: 'energy/s', desc: 'Lighthouse battery regeneration rate when light is off' },
+                { key: 'Light_Drain_Rate', min: 14.0, max: 14.0, unit: 'energy/s', desc: 'Base battery drain rate when spotlight is active' },
+                { key: 'CargoShip_Spawn_Rate', min: 6.0, max: 6.0, unit: 'sec', desc: 'Interval in seconds between Cargo Ship spawns' },
+                { key: 'PirateShip_Spawn_Rate', min: 13.0, max: 13.0, unit: 'sec', desc: 'Interval in seconds between Pirate Ship spawns' },
+                { key: 'Kraken_Spawn_Rate', min: 22.0, max: 22.0, unit: 'sec', desc: 'Interval in seconds between Kraken spawns' },
+                { key: 'Whirlpool_Spawn_Rate', min: 18.0, max: 18.0, unit: 'sec', desc: 'Interval in seconds for Whirlpool vortex relocation/spawn' },
+                { key: 'Level_Duration', min: 180, max: 180, unit: 'sec', desc: 'Total length of the level in seconds' },
+                { key: 'Save_Ships_Ratio', min: 65, max: 65, unit: '%', desc: 'Required percentage of resolved ships that must be saved' },
+                { key: 'Rock_Hazard_Density', min: 8, max: 8, unit: 'count', desc: 'Static hazard density: number of jagged rock clusters' },
+                { key: 'Whirlpool_Hazard_Density', min: 4, max: 4, unit: 'count', desc: 'Static hazard density: number of active whirlpools' }
+            ];
+
+            const BALANCE = {};
+            function syncBalanceObjectFromRows() {
+                for (let i = 0; i < BALANCE_ROWS.length; i++) {
+                    const r = BALANCE_ROWS[i];
+                    const cleanMin = Number.isFinite(Number(r.min)) ? Number(r.min) : 1;
+                    const cleanMax = Number.isFinite(Number(r.max)) ? Math.max(cleanMin, Number(r.max)) : cleanMin;
+                    r.min = cleanMin;
+                    r.max = cleanMax;
+                    BALANCE[r.key] = { min: cleanMin, max: cleanMax, val: cleanMin };
+                }
+                if (uiCannonReloadSpec && BALANCE.Cannon_Reload_Time) {
+                    uiCannonReloadSpec.innerText = `${BALANCE.Cannon_Reload_Time.val.toFixed(1)}s`;
+                }
+            }
+            syncBalanceObjectFromRows();
+
+            const MAX_BATTERY = 200;
+            const LIGHT_CONFIG = {
+                defaultRadius: 28,
+                minRadius: 14,
+                maxRadius: 65,
+                overheatRecoveryThreshold: 35
+            };
+            const CANNON_AOE_RADIUS = 30;
+
+            // ============================================================================
+            // 5. GAME STATE & 2D COORDINATE PROJECTION HELPERS
+            // ============================================================================
+            let score = 0;
+            let shipsSaved = 0;
+            let shipsLost = 0;
+            let levelTimeRemaining = BALANCE.Level_Duration.val;
+            let levelFinishedBannerShown = false;
+            let battery = MAX_BATTERY;
+            let isOverheated = false;
+            let lightRadius = LIGHT_CONFIG.defaultRadius;
+            let cannonCooldown = 0;
+            let globalTime = 0;
+            let waterScrollX = 0;
+            let waterScrollY = 0;
+            let lastFrameTime = performance.now();
+
+            const mouse = {
+                sx: window.innerWidth * 0.5,
+                sy: window.innerHeight * 0.5,
+                wx: 0,
+                wy: 0,
+                vx: 0,
+                vy: 0,
+                leftDown: false
+            };
+
+            const wind = {
+                angle: Math.PI * 0.22,
+                speed: 24,
+                targetAngle: Math.PI * 0.22,
+                targetSpeed: 24,
+                timer: 4.0,
+                vx: 16.9,
+                vy: 16.9
+            };
+
+            const lightning = {
+                timer: 4.5,
+                flashAlpha: 0,
+                bolts: [],
+                shakeX: 0,
+                shakeY: 0
+            };
+
+            const spawnTimers = {
+                ship: 1.5,
+                pirate: 6.5,
+                kraken: 10.0,
+                whirlpool: 18.0
+            };
+
+            let ships = [];
+            let pirates = [];
+            let krakens = [];
+            let rocks = [];
+            let whirlpools = [];
+            let cannonShells = [];
+            let blasts = [];
+            let particles = [];
+            let wakes = [];
+            let floatingTexts = [];
+            let rainDrops = [];
+
+            function worldToScreen(wx, wy) {
+                return {
+                    x: originX + wx * worldScale,
+                    y: originY + wy * worldScale
+                };
+            }
+
+            function screenToWorld(sx, sy) {
+                return {
+                    x: (sx - originX) / worldScale,
+                    y: (sy - originY) / worldScale
+                };
+            }
+
+            function clamp(val, min, max) {
+                return Math.max(min, Math.min(max, val));
+            }
+
+            function randRange(minVal, maxVal) {
+                return minVal + Math.random() * Math.max(0, maxVal - minVal);
+            }
+
+            function normalize2D(vx, vy) {
+                const len = Math.hypot(vx, vy);
+                if (len < 0.0001) return { x: 0.7071, y: 0.7071 };
+                return { x: vx / len, y: vy / len };
+            }
+
+            function updateCanvasSize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                worldScale = Math.max(0.55, Math.min(canvas.width / 1040, canvas.height / 760));
+                originX = canvas.width * 0.5;
+                originY = canvas.height * 0.5;
+                const wPos = screenToWorld(mouse.sx, mouse.sy);
+                mouse.wx = wPos.x;
+                mouse.wy = wPos.y;
+            }
+
+            // ============================================================================
+            // 6. 2D ENTITIES: CARGO SHIPS (1-3), PIRATE RAIDER (4) & KRAKEN (5)
+            // ============================================================================
+            const CARGO_CLASSES = [
+                {
+                    id: 'cutter',
+                    label: 'SWIFT CUTTER',
+                    spriteKey: 'cutter',
+                    speedWeightMin: 0.72,
+                    speedWeightMax: 1.00,
+                    windDriftMult: 1.10,
+                    basePoints: 140,
+                    scale: 0.90
+                },
+                {
+                    id: 'brig',
+                    label: 'MERCHANT BRIG',
+                    spriteKey: 'brig',
+                    speedWeightMin: 0.36,
+                    speedWeightMax: 0.72,
+                    windDriftMult: 0.95,
+                    basePoints: 180,
+                    scale: 1.02
+                },
+                {
+                    id: 'galleon',
+                    label: 'HEAVY GALLEON',
+                    spriteKey: 'galleon',
+                    speedWeightMin: 0.00,
+                    speedWeightMax: 0.36,
+                    windDriftMult: 0.78,
+                    basePoints: 250,
+                    scale: 1.15
+                }
+            ];
+
+            class CargoShip {
+                constructor(customSpawn) {
+                    const cls = CARGO_CLASSES[Math.floor(Math.random() * CARGO_CLASSES.length)];
+                    this.cls = cls;
+
+                    const sheetMin = BALANCE.CargoShip_Speed.min;
+                    const sheetMax = BALANCE.CargoShip_Speed.max;
+                    const span = Math.max(1, sheetMax - sheetMin);
+                    const cMin = sheetMin + span * cls.speedWeightMin;
+                    const cMax = sheetMin + span * cls.speedWeightMax;
+                    this.speed = randRange(cMin, cMax);
+                    this.windDriftMult = cls.windDriftMult;
+                    this.basePoints = cls.basePoints;
+
+                    if (customSpawn) {
+                        this.x = customSpawn.x;
+                        this.y = customSpawn.y;
+                    } else {
+                        const roll = Math.random();
+                        if (roll < 0.45) {
+                            this.x = -460;
+                            this.y = -320 + Math.random() * 620;
+                        } else if (roll < 0.85) {
+                            this.x = -420 + Math.random() * 620;
+                            this.y = -340;
+                        } else {
+                            this.x = -440 + Math.random() * 160;
+                            this.y = 220 + Math.random() * 110;
+                        }
+                    }
+
+                    const aimX = -20 + (Math.random() - 0.5) * 200;
+                    const aimY = -20 + (Math.random() - 0.5) * 200;
+                    this.lastLightDir = normalize2D(aimX - this.x, aimY - this.y);
+                    this.visualAngle = Math.atan2(this.lastLightDir.y, this.lastLightDir.x);
+
+                    this.hasLightDirective = false;
+                    this.lightExitGraceTimer = 0;
+                    this.wakeTimer = 0;
+
+                    this.batterySpent = 0;
+                    this.isLitByBeam = false;
+                    this.isIlluminated = false;
+                    this.isDead = false;
+                }
+
+                update(dt, beamActive, currentDrainRate, lightningLit) {
+                    const dxLight = mouse.wx - this.x;
+                    const dyLight = mouse.wy - this.y;
+                    const distToLight = Math.hypot(dxLight, dyLight);
+
+                    const directContactRadius = lightRadius + 12;
+                    const peripheralLeadRadius = lightRadius + 52;
+
+                    const insideBeam = beamActive && distToLight <= directContactRadius;
+                    if (insideBeam) {
+                        this.hasLightDirective = true;
+                        this.lightExitGraceTimer = 0.42;
+                    } else if (this.lightExitGraceTimer > 0) {
+                        this.lightExitGraceTimer = Math.max(0, this.lightExitGraceTimer - dt);
+                    }
+
+                    const inExitingLeadZone =
+                        beamActive &&
+                        this.lightExitGraceTimer > 0 &&
+                        distToLight <= peripheralLeadRadius;
+
+                    this.isLitByBeam = insideBeam;
+                    this.isIlluminated = insideBeam || lightningLit;
+
+                    if (insideBeam || inExitingLeadZone) {
+                        this.hasLightDirective = true;
+
+                        if (distToLight > 3.0) {
+                            const toLight = normalize2D(dxLight, dyLight);
+                            const mouseSpeed = Math.hypot(mouse.vx, mouse.vy);
+                            let targetDir = toLight;
+                            if (mouseSpeed > 0.4 && distToLight < lightRadius * 0.65) {
+                                const sweep = normalize2D(mouse.vx, mouse.vy);
+                                targetDir = normalize2D(toLight.x * 0.65 + sweep.x * 0.35, toLight.y * 0.65 + sweep.y * 0.35);
+                            }
+
+                            const turnRate = Math.min(1.0, dt * 18.0);
+                            this.lastLightDir = normalize2D(
+                                this.lastLightDir.x + (targetDir.x - this.lastLightDir.x) * turnRate,
+                                this.lastLightDir.y + (targetDir.y - this.lastLightDir.y) * turnRate
+                            );
+                        } else if (Math.hypot(mouse.vx, mouse.vy) > 0.25) {
+                            const sweep = normalize2D(mouse.vx, mouse.vy);
+                            const turnRate = Math.min(1.0, dt * 18.0);
+                            this.lastLightDir = normalize2D(
+                                this.lastLightDir.x + (sweep.x - this.lastLightDir.x) * turnRate,
+                                this.lastLightDir.y + (sweep.y - this.lastLightDir.y) * turnRate
+                            );
+                        }
+
+                        if (insideBeam) {
+                            this.batterySpent += currentDrainRate * dt;
+                        }
+                    }
+
+                    const targetAngle = Math.atan2(this.lastLightDir.y, this.lastLightDir.x);
+                    let diff = targetAngle - this.visualAngle;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    this.visualAngle += diff * Math.min(1.0, dt * 12.0);
+
+                    if (this.isIlluminated) {
+                        this.x += this.lastLightDir.x * this.speed * dt;
+                        this.y += this.lastLightDir.y * this.speed * dt;
+                    } else if (this.hasLightDirective) {
+                        const cruiseSpeed = this.speed * 0.85;
+                        this.x += (this.lastLightDir.x * cruiseSpeed + wind.vx * this.windDriftMult * 0.35) * dt;
+                        this.y += (this.lastLightDir.y * cruiseSpeed + wind.vy * this.windDriftMult * 0.35) * dt;
+                    } else {
+                        this.x += (this.lastLightDir.x * (this.speed * 0.22) + wind.vx * this.windDriftMult) * dt;
+                        this.y += (this.lastLightDir.y * (this.speed * 0.22) + wind.vy * this.windDriftMult) * dt;
+                    }
+
+                    if (!this.isIlluminated) {
+                        for (let i = 0; i < whirlpools.length; i++) {
+                            const wp = whirlpools[i];
+                            const dx = wp.x - this.x;
+                            const dy = wp.y - this.y;
+                            const d = Math.hypot(dx, dy);
+                            if (d < wp.pullRadius && d > 1) {
+                                const pull = (1 - d / wp.pullRadius) * wp.pullSpeed;
+                                const nx = dx / d;
+                                const ny = dy / d;
+                                this.x += (nx * pull - ny * pull * 0.65) * dt;
+                                this.y += (ny * pull + nx * pull * 0.65) * dt;
+                            }
+                        }
+                    }
+
+                    this.wakeTimer -= dt;
+                    if (this.wakeTimer <= 0) {
+                        this.wakeTimer = 0.14;
+                        wakes.push({
+                            x: this.x - Math.cos(this.visualAngle) * 14,
+                            y: this.y - Math.sin(this.visualAngle) * 14,
+                            angle: this.visualAngle,
+                            radius: 5,
+                            alpha: 0.5,
+                            color: this.hasLightDirective ? 'rgba(45, 212, 191,' : 'rgba(224, 242, 254,'
+                        });
+                    }
+
+                    if (this.x < -WORLD_LIMIT - 80 || this.x > WORLD_LIMIT + 80 ||
+                        this.y < -WORLD_LIMIT - 80 || this.y > WORLD_LIMIT + 80) {
+                        this.isDead = true;
+                        shipsLost++;
+                        spawnFloatingText(
+                            clamp(this.x, -WORLD_LIMIT + 40, WORLD_LIMIT - 40),
+                            clamp(this.y, -WORLD_LIMIT + 40, WORLD_LIMIT - 40),
+                            'DRIFTED LOST AT SEA!',
+                            '#F87171'
+                        );
+                    }
+                }
+
+                draw(ctx) {
+                    const pos = worldToScreen(this.x, this.y);
+
+                    // 1. Course Lock Vector Line (`lastLightDir`)
+                    const arrowLen = (this.hasLightDirective ? 48 : 32) * worldScale;
+                    const tipX = pos.x + this.lastLightDir.x * arrowLen;
+                    const tipY = pos.y + this.lastLightDir.y * arrowLen;
+
+                    ctx.save();
+                    if (this.isLitByBeam) {
+                        ctx.strokeStyle = '#FEF08A';
+                        ctx.lineWidth = 2.4;
+                    } else if (this.hasLightDirective) {
+                        ctx.strokeStyle = '#2DD4BF';
+                        ctx.lineWidth = 2.0;
+                    } else {
+                        ctx.strokeStyle = 'rgba(224, 242, 254, 0.45)';
+                        ctx.lineWidth = 1.4;
+                    }
+                    ctx.setLineDash(this.hasLightDirective ? [6, 3] : [3, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                    ctx.lineTo(tipX, tipY);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    const ang = Math.atan2(tipY - pos.y, tipX - pos.x);
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.beginPath();
+                    ctx.moveTo(tipX, tipY);
+                    ctx.lineTo(tipX - Math.cos(ang - 0.5) * 7, tipY - Math.sin(ang - 0.5) * 7);
+                    ctx.lineTo(tipX - Math.cos(ang + 0.5) * 7, tipY - Math.sin(ang + 0.5) * 7);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 2. Rotated 2D Top-Down Ship Sprite (External PNG 1, 2, or 3)
+                    const sprite = SPRITES[this.cls.spriteKey];
+                    if (sprite) {
+                        ctx.save();
+                        ctx.translate(pos.x, pos.y);
+                        ctx.rotate(this.visualAngle);
+                        const drawScale = this.cls.scale * worldScale * 0.55;
+                        ctx.drawImage(
+                            sprite,
+                            -sprite.width * 0.5 * drawScale,
+                            -sprite.height * 0.5 * drawScale,
+                            sprite.width * drawScale,
+                            sprite.height * drawScale
+                        );
+
+                        // Prow Lantern Dot (#FDE047 Gold / #2DD4BF Teal)
+                        const prowX = (sprite.width * 0.42) * drawScale;
+                        ctx.fillStyle = this.isLitByBeam ? '#FEF08A' : (this.hasLightDirective ? '#2DD4BF' : '#F59E0B');
+                        ctx.beginPath();
+                        ctx.arc(prowX, 0, 3.2 * worldScale, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    }
+
+                    // 3. Cinzel Ship Class Tag
+                    if (this.isIlluminated || this.hasLightDirective) {
+                        ctx.font = '700 10px "Cinzel", serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillStyle = this.isLitByBeam ? '#FEF08A' : '#2DD4BF';
+                        const lockTag = this.hasLightDirective ? '✓LOCKED' : '';
+                        ctx.fillText(`${this.cls.label} ${Math.round(this.speed)}u/s ${lockTag}`, pos.x, pos.y - 26 * worldScale);
+                    }
+                }
+            }
+
+            class PirateRaider {
+                constructor() {
+                    const edge = Math.floor(Math.random() * 3);
+                    if (edge === 0) {
+                        this.x = -465;
+                        this.y = (Math.random() - 0.5) * 620;
+                    } else if (edge === 1) {
+                        this.x = (Math.random() - 0.5) * 620;
+                        this.y = -350;
+                    } else {
+                        this.x = 450;
+                        this.y = -320 + Math.random() * 280;
+                    }
+                    this.baseSpeed = randRange(BALANCE.PirateShip_Speed.min, BALANCE.PirateShip_Speed.max);
+                    this.visualAngle = Math.atan2(-this.y, -this.x);
+                    this.wakeTimer = 0;
+                    this.isDead = false;
+                }
+
+                update(dt) {
+                    let target = null;
+                    let bestDist = Infinity;
+                    for (let i = 0; i < ships.length; i++) {
+                        const s = ships[i];
+                        const d = Math.hypot(s.x - this.x, s.y - this.y);
+                        if (d < bestDist) {
+                            bestDist = d;
+                            target = s;
+                        }
+                    }
+
+                    let moveDir;
+                    let speed = this.baseSpeed;
+                    if (target) {
+                        if (bestDist < 130) speed *= 1.18;
+                        moveDir = normalize2D(target.x - this.x, target.y - this.y);
+                        this.x += moveDir.x * speed * dt;
+                        this.y += moveDir.y * speed * dt;
+
+                        if (bestDist < 20) {
+                            target.isDead = true;
+                            this.isDead = true;
+                            shipsLost++;
+                            spawnParticles(target.x, target.y, '#DC2626', 26);
+                            spawnFloatingText(target.x, target.y, 'PLUNDERED BY CORSAIRS!', '#F87171');
+                        }
+                    } else {
+                        moveDir = normalize2D(-this.x, -this.y);
+                        this.x += (moveDir.x * speed * 0.7 + wind.vx * 0.3) * dt;
+                        this.y += (moveDir.y * speed * 0.7 + wind.vy * 0.3) * dt;
+                    }
+
+                    const targetAngle = Math.atan2(moveDir.y, moveDir.x);
+                    let diff = targetAngle - this.visualAngle;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    this.visualAngle += diff * Math.min(1.0, dt * 10.0);
+
+                    this.wakeTimer -= dt;
+                    if (this.wakeTimer <= 0) {
+                        this.wakeTimer = 0.14;
+                        wakes.push({
+                            x: this.x - Math.cos(this.visualAngle) * 14,
+                            y: this.y - Math.sin(this.visualAngle) * 14,
+                            angle: this.visualAngle,
+                            radius: 5,
+                            alpha: 0.5,
+                            color: 'rgba(220, 38, 38,'
+                        });
+                    }
+                }
+
+                draw(ctx) {
+                    const pos = worldToScreen(this.x, this.y);
+                    const sprite = SPRITES.pirate;
+                    if (sprite) {
+                        ctx.save();
+                        ctx.translate(pos.x, pos.y);
+                        ctx.rotate(this.visualAngle);
+                        const drawScale = 0.56 * worldScale;
+                        ctx.drawImage(
+                            sprite,
+                            -sprite.width * 0.5 * drawScale,
+                            -sprite.height * 0.5 * drawScale,
+                            sprite.width * drawScale,
+                            sprite.height * drawScale
+                        );
+                        ctx.restore();
+                    }
+                }
+            }
+
+            class KrakenMonster {
+                constructor() {
+                    this.x = (Math.random() - 0.5) * 560;
+                    this.y = (Math.random() - 0.5) * 460;
+                    if (Math.hypot(this.x - HARBOR.x, this.y - HARBOR.y) < 160) {
+                        this.x = -210;
+                        this.y = -130;
+                    }
+                    this.baseSpeed = randRange(BALANCE.Kraken_Speed.min, BALANCE.Kraken_Speed.max);
+                    this.repelSpeed = Math.max(85, this.baseSpeed * 2.8);
+                    this.phase = Math.random() * Math.PI * 2;
+                    this.stunTimer = 0;
+                    this.isRepelled = false;
+                    this.isDead = false;
+                }
+
+                update(dt, beamActive) {
+                    this.phase += dt * 4.8;
+                    if (this.stunTimer > 0) {
+                        this.stunTimer -= dt;
+                        return;
+                    }
+
+                    const distToBeam = Math.hypot(this.x - mouse.wx, this.y - mouse.wy);
+                    const hitByLight = beamActive && distToBeam <= (lightRadius + 16);
+                    this.isRepelled = hitByLight;
+
+                    if (hitByLight) {
+                        const away = normalize2D(this.x - mouse.wx, this.y - mouse.wy);
+                        this.x += away.x * this.repelSpeed * dt;
+                        this.y += away.y * this.repelSpeed * dt;
+                    } else {
+                        const surge = 1.0 + 0.4 * Math.sin(this.phase);
+                        const speed = this.baseSpeed * surge;
+
+                        let target = null;
+                        let bestD = 280;
+                        for (let i = 0; i < ships.length; i++) {
+                            const d = Math.hypot(ships[i].x - this.x, ships[i].y - this.y);
+                            if (d < bestD) {
+                                bestD = d;
+                                target = ships[i];
+                            }
+                        }
+
+                        if (target) {
+                            const dir = normalize2D(target.x - this.x, target.y - this.y);
+                            this.x += dir.x * speed * dt;
+                            this.y += dir.y * speed * dt;
+                        } else {
+                            this.x += Math.cos(this.phase * 0.35) * speed * 0.6 * dt;
+                            this.y += Math.sin(this.phase * 0.35) * speed * 0.6 * dt;
+                        }
+                    }
+
+                    const dHarbor = Math.hypot(this.x - HARBOR.x, this.y - HARBOR.y);
+                    if (dHarbor < HARBOR.radius + 28) {
+                        const push = normalize2D(this.x - HARBOR.x, this.y - HARBOR.y);
+                        this.x = HARBOR.x + push.x * (HARBOR.radius + 29);
+                        this.y = HARBOR.y + push.y * (HARBOR.radius + 29);
+                    }
+
+                    for (let i = 0; i < ships.length; i++) {
+                        const s = ships[i];
+                        if (!s.isDead && Math.hypot(s.x - this.x, s.y - this.y) < 23) {
+                            s.isDead = true;
+                            shipsLost++;
+                            spawnParticles(s.x, s.y, '#7E22CE', 28);
+                            spawnFloatingText(s.x, s.y, 'DRAGGED UNDER BY KRAKEN!', '#D8B4FE');
+                        }
+                    }
+                }
+
+                draw(ctx) {
+                    const pos = worldToScreen(this.x, this.y);
+                    const s = worldScale;
+
+                    ctx.save();
+                    ctx.translate(pos.x, pos.y);
+
+                    // Bioluminescent Aura (#7E22CE / #D8B4FE)
+                    const auraGrad = ctx.createRadialGradient(0, 0, 4 * s, 0, 0, 34 * s);
+                    auraGrad.addColorStop(0, this.isRepelled ? 'rgba(244, 63, 94, 0.42)' : 'rgba(126, 34, 206, 0.36)');
+                    auraGrad.addColorStop(1, 'rgba(126, 34, 206, 0)');
+                    ctx.fillStyle = auraGrad;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 34 * s, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Use External Asset #5 (`ChatGPT Image ... -5.png`) if loaded, else crisp vector Kraken
+                    if (SPRITES.kraken) {
+                        const pulseScale = (0.42 + Math.sin(this.phase) * 0.03) * s;
+                        ctx.rotate(Math.sin(this.phase * 0.5) * 0.22);
+                        ctx.drawImage(
+                            SPRITES.kraken,
+                            -SPRITES.kraken.width * 0.5 * pulseScale,
+                            -SPRITES.kraken.height * 0.5 * pulseScale,
+                            SPRITES.kraken.width * pulseScale,
+                            SPRITES.kraken.height * pulseScale
+                        );
+                    } else {
+                        for (let i = 0; i < 8; i++) {
+                            const baseAngle = (i / 8) * Math.PI * 2 + globalTime * 0.55;
+                            const wave1 = Math.sin(this.phase + i * 0.9) * 9 * s;
+                            const wave2 = Math.cos(this.phase * 1.2 + i) * 12 * s;
+
+                            const midX = Math.cos(baseAngle) * 14 * s - Math.sin(baseAngle) * wave1;
+                            const midY = Math.sin(baseAngle) * 14 * s + Math.cos(baseAngle) * wave1;
+                            const tipX = Math.cos(baseAngle) * 27 * s - Math.sin(baseAngle) * wave2;
+                            const tipY = Math.sin(baseAngle) * 27 * s + Math.cos(baseAngle) * wave2;
+
+                            ctx.strokeStyle = this.isRepelled ? '#FB7185' : '#7E22CE';
+                            ctx.lineWidth = 4.4 * s;
+                            ctx.lineCap = 'round';
+                            ctx.beginPath();
+                            ctx.moveTo(0, 0);
+                            ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+                            ctx.stroke();
+
+                            ctx.fillStyle = '#D8B4FE';
+                            ctx.beginPath();
+                            ctx.arc(midX * 0.85, midY * 0.85, 1.6 * s, 0, Math.PI * 2);
+                            ctx.arc(tipX * 0.75, tipY * 0.75, 1.3 * s, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+
+                        ctx.fillStyle = '#7E22CE';
+                        ctx.strokeStyle = '#030914';
+                        ctx.lineWidth = 2.0 * s;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 13 * s, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        ctx.fillStyle = '#4ADE80';
+                        ctx.beginPath();
+                        ctx.arc(-4.5 * s, -3.5 * s, 2.6 * s, 0, Math.PI * 2);
+                        ctx.arc(4.5 * s, -3.5 * s, 2.6 * s, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    ctx.restore();
+                }
+            }
+
+            // ============================================================================
+            // 7. WORLD HAZARDS, SPREADSHEET PARSER & CANNON LOGIC
+            // ============================================================================
+            function initRain() {
+                rainDrops = [];
+                for (let i = 0; i < 110; i++) {
+                    rainDrops.push({
+                        x: Math.random() * window.innerWidth,
+                        y: Math.random() * window.innerHeight,
+                        len: 13 + Math.random() * 14,
+                        speed: 560 + Math.random() * 260
+                    });
+                }
+            }
+
+            function createWhirlpoolInstance() {
+                let wx = 0;
+                let wy = 0;
+                for (let attempt = 0; attempt < 20; attempt++) {
+                    wx = (Math.random() - 0.5) * 680;
+                    wy = (Math.random() - 0.5) * 520;
+                    if (Math.hypot(wx - HARBOR.x, wy - HARBOR.y) >= HARBOR.radius + 95 &&
+                        Math.hypot(wx - LIGHTHOUSE.x, wy - LIGHTHOUSE.y) >= 95) {
+                        break;
+                    }
+                }
+                return {
+                    x: wx,
+                    y: wy,
+                    killRadius: 16,
+                    pullRadius: 76,
+                    pullSpeed: randRange(BALANCE.WhirlpoolPull_Speed.min, BALANCE.WhirlpoolPull_Speed.max),
+                    spinSpeed: 2.4 + Math.random() * 1.4,
+                    angle: Math.random() * Math.PI * 2
+                };
+            }
+
+            function rebuildStaticHazardsFromSpreadsheet() {
+                rocks = [];
+                whirlpools = [];
+
+                const targetRockCount = clamp(Math.round(BALANCE.Rock_Hazard_Density.val), 0, 40);
+                let rockAttempts = 0;
+                while (rocks.length < targetRockCount && rockAttempts < 150) {
+                    rockAttempts++;
+                    const rx = (Math.random() - 0.5) * 740;
+                    const ry = (Math.random() - 0.5) * 540;
+                    if (Math.hypot(rx - HARBOR.x, ry - HARBOR.y) < HARBOR.radius + 80) continue;
+                    if (Math.hypot(rx - LIGHTHOUSE.x, ry - LIGHTHOUSE.y) < 95) continue;
+                    rocks.push({
+                        x: rx,
+                        y: ry,
+                        radius: 22 + Math.random() * 7,
+                        variant: rocks.length % 3,
+                        angle: (rocks.length * 1.15) % (Math.PI * 2),
+                        foamPhase: Math.random() * Math.PI * 2
+                    });
+                }
+
+                const targetWhirlpoolCount = clamp(Math.round(BALANCE.Whirlpool_Hazard_Density.val), 0, 25);
+                for (let i = 0; i < targetWhirlpoolCount; i++) {
+                    whirlpools.push(createWhirlpoolInstance());
+                }
+            }
+
+            function resetGame() {
+                syncBalanceObjectFromRows();
+                score = 0;
+                shipsSaved = 0;
+                shipsLost = 0;
+                levelTimeRemaining = BALANCE.Level_Duration.val;
+                levelFinishedBannerShown = false;
+                battery = MAX_BATTERY;
+                isOverheated = false;
+                cannonCooldown = 0;
+                lightning.timer = 3.2;
+                lightning.flashAlpha = 0;
+                lightning.bolts = [];
+
+                ships = [];
+                pirates = [];
+                krakens = [];
+                cannonShells = [];
+                blasts = [];
+                particles = [];
+                wakes = [];
+                floatingTexts = [];
+
+                spawnTimers.ship = BALANCE.CargoShip_Spawn_Rate.val;
+                spawnTimers.pirate = BALANCE.PirateShip_Spawn_Rate.val;
+                spawnTimers.kraken = BALANCE.Kraken_Spawn_Rate.val;
+                spawnTimers.whirlpool = BALANCE.Whirlpool_Spawn_Rate.val;
+
+                wind.speed = randRange(BALANCE.StormWind_Speed.min, BALANCE.StormWind_Speed.max);
+                wind.targetSpeed = wind.speed;
+
+                rebuildStaticHazardsFromSpreadsheet();
+
+                ships.push(new CargoShip({ x: -340, y: -150 }));
+                ships.push(new CargoShip({ x: -160, y: -260 }));
+                ships.push(new CargoShip({ x: -310, y: 110 }));
+
+                pirates.push(new PirateRaider());
+                krakens.push(new KrakenMonster());
+
+                uiEco.innerText = 'READY (S+ 5.0x)';
+                spawnFloatingText(HARBOR.x, HARBOR.y - 30, 'FRESNEL BEACON ONLINE — GUIDE THE FLEET!', '#2DD4BF');
+            }
+
+            function renderSpreadsheetTableUI() {
+                if (!sheetTableBody) return;
+                sheetTableBody.innerHTML = '';
+                for (let i = 0; i < BALANCE_ROWS.length; i++) {
+                    const row = BALANCE_ROWS[i];
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="py-1 pr-2">
+                            <div class="font-semibold text-amber-100 mono">${row.key}</div>
+                            <div class="text-[9px] text-slate-400">${row.desc}</div>
+                        </td>
+                        <td class="py-1 px-1 text-right">
+                            <input type="number" step="any" data-idx="${i}" data-field="min" class="sheet-input" value="${row.min}" />
+                        </td>
+                        <td class="py-1 px-1 text-right">
+                            <input type="number" step="any" data-idx="${i}" data-field="max" class="sheet-input" value="${row.max}" />
+                        </td>
+                        <td class="py-1 pl-2 text-[10px] text-teal-300 mono">${row.unit}</td>
+                    `;
+                    sheetTableBody.appendChild(tr);
+                }
+
+                const inputs = sheetTableBody.querySelectorAll('input.sheet-input');
+                inputs.forEach((inp) => {
+                    inp.addEventListener('change', (e) => {
+                        const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+                        const field = e.target.getAttribute('data-field');
+                        const val = parseFloat(e.target.value);
+                        if (Number.isFinite(val) && BALANCE_ROWS[idx]) {
+                            BALANCE_ROWS[idx][field] = val;
+                            if (field === 'min' && BALANCE_ROWS[idx].max < val) {
+                                BALANCE_ROWS[idx].max = val;
+                            }
+                            syncBalanceObjectFromRows();
+                            renderSpreadsheetTableUI();
+                        }
+                    });
+                });
+            }
+
+            function applyParsedRowsToBalance(records, sourceLabel) {
+                let updatedCount = 0;
+                for (let i = 0; i < records.length; i++) {
+                    const rec = records[i];
+                    const rawKey = String(
+                        rec.Parameter_Key || rec.Parameter || rec.Key || rec.Name || rec[0] || ''
+                    ).trim();
+                    if (!rawKey) continue;
+
+                    const targetRow = BALANCE_ROWS.find(
+                        (r) => r.key.toLowerCase() === rawKey.toLowerCase()
+                    );
+                    if (targetRow) {
+                        const isSpeedRangeKey = rawKey.toLowerCase().includes('speed');
+                        let rawMin, rawMax;
+
+                        if (!isSpeedRangeKey && rec.Active_Value !== undefined && rec.Active_Value !== '') {
+                            rawMin = rec.Active_Value;
+                            rawMax = rec.Active_Value;
+                        } else {
+                            rawMin = rec.Min_Value !== undefined ? rec.Min_Value : (rec.Min !== undefined ? rec.Min : (rec.Value !== undefined ? rec.Value : rec[1]));
+                            rawMax = rec.Max_Value !== undefined ? rec.Max_Value : (rec.Max !== undefined ? rec.Max : (rec.Value !== undefined ? rec.Value : rec[2]));
+                        }
+
+                        const numMin = parseFloat(rawMin);
+                        const numMax = parseFloat(rawMax !== undefined ? rawMax : rawMin);
+
+                        if (Number.isFinite(numMin)) {
+                            targetRow.min = numMin;
+                            targetRow.max = Number.isFinite(numMax) ? Math.max(numMin, numMax) : numMin;
+                            updatedCount++;
+                        }
+                    }
+                }
+
+                if (updatedCount > 0) {
+                    syncBalanceObjectFromRows();
+                    renderSpreadsheetTableUI();
+                    levelTimeRemaining = BALANCE.Level_Duration.val;
+                    rebuildStaticHazardsFromSpreadsheet();
+                    if (uiSheetStatus) {
+                        uiSheetStatus.innerText = `Sheet Synced (${updatedCount} rows)`;
+                    }
+                    if (sheetSourceBanner) {
+                        sheetSourceBanner.innerHTML = `<span class="text-teal-300 font-bold">✓ Loaded ${updatedCount} parameters</span> from <code class="mono text-amber-200">${sourceLabel}</code>`;
+                    }
+                    spawnFloatingText(HARBOR.x, HARBOR.y, `SPREADSHEET LOADED (${updatedCount} PARAMS)!`, '#FEF08A');
+                    return true;
+                }
+                return false;
+            }
+
+            function parseCsvTextToRecords(csvText) {
+                const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+                if (lines.length === 0) return [];
+                const headers = lines[0].split(/[,\t;]/).map((h) => h.trim().replace(/^"|"$/g, ''));
+                const records = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = lines[i].split(/[,\t;]/).map((c) => c.trim().replace(/^"|"$/g, ''));
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                        obj[h] = cols[idx];
+                        obj[idx] = cols[idx];
+                    });
+                    records.push(obj);
+                }
+                return records;
+            }
+
+            function parseArrayBufferSpreadsheet(buffer, filename) {
+                try {
+                    if (window.XLSX) {
+                        const wb = window.XLSX.read(buffer, { type: 'array' });
+                        const firstSheet = wb.Sheets[wb.SheetNames[0]];
+                        const jsonRows = window.XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+                        if (applyParsedRowsToBalance(jsonRows, filename)) return true;
+                    }
+                } catch (err) {
+                    // Fallback to CSV text parser
+                }
+                const text = new TextDecoder('utf-8').decode(buffer);
+                const records = parseCsvTextToRecords(text);
+                return applyParsedRowsToBalance(records, filename);
+            }
+
+            async function autoProbeSpreadsheetFolder() {
+                const urls = getCandidateUrls();
+                for (let i = 0; i < urls.length; i++) {
+                    const url = urls[i];
+                    try {
+                        const resp = await fetch(url, { cache: 'no-store' });
+                        if (resp && resp.ok) {
+                            const buf = await resp.arrayBuffer();
+                            if (parseArrayBufferSpreadsheet(buf, url)) {
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        // Continue silently
+                    }
+                }
+            }
+
+            function exportSpreadsheetFile(format) {
+                const exportData = BALANCE_ROWS.map((r) => ({
+                    Parameter_Key: r.key,
+                    Min_Value: r.min,
+                    Max_Value: r.max,
+                    Unit: r.unit,
+                    Description: r.desc
+                }));
+
+                if (format === 'xlsx' && window.XLSX) {
+                    const ws = window.XLSX.utils.json_to_sheet(exportData);
+                    const wb = window.XLSX.utils.book_new();
+                    window.XLSX.utils.book_append_sheet(wb, ws, 'GameBalance');
+                    window.XLSX.writeFile(wb, 'GameBalance.xlsx');
+                } else {
+                    const header = 'Parameter_Key,Min_Value,Max_Value,Unit,Description';
+                    const rows = BALANCE_ROWS.map((r) => `${r.key},${r.min},${r.max},${r.unit},"${r.desc}"`);
+                    const csvContent = [header, ...rows].join('\n');
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'GameBalance.csv';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            }
+
+            function fireDefenseCannon(targetWx, targetWy) {
+                cannonCooldown = BALANCE.Cannon_Reload_Time.val;
+                cannonShells.push({
+                    startX: LIGHTHOUSE.x,
+                    startY: LIGHTHOUSE.y,
+                    targetX: targetWx,
+                    targetY: targetWy,
+                    progress: 0,
+                    duration: 0.18
+                });
+            }
+
+            function detonateCannon(wx, wy) {
+                blasts.push({
+                    x: wx,
+                    y: wy,
+                    radius: 4,
+                    maxRadius: CANNON_AOE_RADIUS,
+                    life: 1.0
+                });
+                spawnParticles(wx, wy, '#F97316', 28);
+
+                for (let i = 0; i < pirates.length; i++) {
+                    const p = pirates[i];
+                    if (!p.isDead && Math.hypot(p.x - wx, p.y - wy) <= CANNON_AOE_RADIUS) {
+                        p.isDead = true;
+                        score += 150;
+                        spawnParticles(p.x, p.y, '#DC2626', 22);
+                        spawnFloatingText(p.x, p.y, '+150 CORSAIR SUNK!', '#FEF08A');
+                    }
+                }
+
+                for (let i = 0; i < krakens.length; i++) {
+                    const k = krakens[i];
+                    if (!k.isDead && Math.hypot(k.x - wx, k.y - wy) <= CANNON_AOE_RADIUS + 8) {
+                        k.stunTimer = 2.6;
+                        const push = normalize2D(k.x - wx, k.y - wy);
+                        k.x += push.x * 60;
+                        k.y += push.y * 60;
+                        score += 100;
+                        spawnParticles(k.x, k.y, '#7E22CE', 20);
+                        spawnFloatingText(k.x, k.y, '+100 KRAKEN REPELLED!', '#D8B4FE');
+                    }
+                }
+
+                for (let i = 0; i < ships.length; i++) {
+                    const s = ships[i];
+                    if (!s.isDead && Math.hypot(s.x - wx, s.y - wy) <= CANNON_AOE_RADIUS) {
+                        s.isDead = true;
+                        shipsLost++;
+                        score = Math.max(0, score - 200);
+                        spawnParticles(s.x, s.y, '#F97316', 36);
+                        spawnFloatingText(s.x, s.y, '⚠ FRIENDLY FIRE! CARGO SUNK (-200)', '#FF4D4D');
+                    }
+                }
+            }
+
+            function triggerStormLightning() {
+                lightning.flashAlpha = 0.90;
+                lightning.shakeX = (Math.random() - 0.5) * 9;
+                lightning.shakeY = (Math.random() - 0.5) * 9;
+                lightning.bolts = [];
+
+                const count = 1 + (Math.random() > 0.5 ? 1 : 0);
+                for (let b = 0; b < count; b++) {
+                    const mainBolt = [];
+                    let bx = canvas.width * (0.15 + Math.random() * 0.70);
+                    let by = 0;
+                    const endY = canvas.height * (0.45 + Math.random() * 0.35);
+                    while (by < endY) {
+                        mainBolt.push({ x: bx, y: by });
+                        bx += (Math.random() - 0.5) * 58;
+                        by += 26 + Math.random() * 28;
+
+                        if (Math.random() < 0.35 && mainBolt.length > 2) {
+                            const branch = [{ x: bx, y: by }];
+                            let fx = bx;
+                            let fy = by;
+                            for (let k = 0; k < 4; k++) {
+                                fx += (Math.random() - 0.5) * 45;
+                                fy += 20 + Math.random() * 22;
+                                branch.push({ x: fx, y: fy });
+                            }
+                            lightning.bolts.push(branch);
+                        }
+                    }
+                    lightning.bolts.push(mainBolt);
+                }
+            }
+
+            function spawnParticles(wx, wy, color, count = 18) {
+                for (let i = 0; i < count; i++) {
+                    particles.push({
+                        x: wx,
+                        y: wy,
+                        vx: (Math.random() - 0.5) * 125,
+                        vy: (Math.random() - 0.5) * 125,
+                        life: 0.65 + Math.random() * 0.45,
+                        color: color
+                    });
+                }
+            }
+
+            function spawnFloatingText(wx, wy, text, color = '#FFFFFF') {
+                floatingTexts.push({
+                    wx: wx,
+                    wy: wy,
+                    text: text,
+                    color: color,
+                    life: 1.5,
+                    maxLife: 1.5
+                });
+            }
+
+            // ============================================================================
+            // 8. MAIN UPDATE & HIGH-VISIBILITY MOONLIT SEA-CHART RENDERER
+            // ============================================================================
+            function update(dt) {
+                if (levelTimeRemaining > 0) {
+                    levelTimeRemaining = Math.max(0, levelTimeRemaining - dt);
+                    if (levelTimeRemaining <= 0 && !levelFinishedBannerShown) {
+                        levelFinishedBannerShown = true;
+                        const totalResolved = shipsSaved + shipsLost;
+                        const actualRatio = totalResolved > 0 ? (shipsSaved / totalResolved) * 100 : 100;
+                        const targetRatio = BALANCE.Save_Ships_Ratio.val;
+                        if (actualRatio >= targetRatio) {
+                            score += 500;
+                            spawnFloatingText(HARBOR.x, HARBOR.y, `SHIFT COMPLETE! SAVED ${Math.round(actualRatio)}% (+500)`, '#2DD4BF');
+                        } else {
+                            spawnFloatingText(HARBOR.x, HARBOR.y, `SHIFT ENDED: SAVED ${Math.round(actualRatio)}% (NEEDED ${targetRatio}%)`, '#F87171');
+                        }
+                    }
+                }
+
+                // Storm Crosswind & Scrolling Ocean Surface
+                wind.timer -= dt;
+                if (wind.timer <= 0) {
+                    wind.targetSpeed = randRange(BALANCE.StormWind_Speed.min, BALANCE.StormWind_Speed.max);
+                    wind.targetAngle = Math.PI * (0.12 + Math.random() * 0.32);
+                    wind.timer = 4.0 + Math.random() * 3.0;
+                }
+                wind.speed += (wind.targetSpeed - wind.speed) * dt * 0.8;
+                wind.angle += (wind.targetAngle - wind.angle) * dt * 0.8;
+                wind.vx = Math.cos(wind.angle) * wind.speed;
+                wind.vy = Math.sin(wind.angle) * wind.speed;
+
+                waterScrollX = (waterScrollX + wind.vx * dt * 0.55) % 256;
+                waterScrollY = (waterScrollY + wind.vy * dt * 0.55) % 256;
+
+                // Lightning
+                lightning.timer -= dt;
+                if (lightning.timer <= 0) {
+                    triggerStormLightning();
+                    lightning.timer = 6.5 + Math.random() * 6.0;
+                }
+                if (lightning.flashAlpha > 0) {
+                    lightning.flashAlpha = Math.max(0, lightning.flashAlpha - dt * 1.6);
+                    lightning.shakeX *= 0.84;
+                    lightning.shakeY *= 0.84;
+                } else {
+                    lightning.shakeX = 0;
+                    lightning.shakeY = 0;
+                }
+                const lightningLit = lightning.flashAlpha > 0.24;
+
+                // Regenerative Battery
+                let beamActive = false;
+                let currentDrainRate = 0;
+
+                if (mouse.leftDown && !isOverheated && battery > 0) {
+                    const areaFactor = Math.pow(lightRadius / LIGHT_CONFIG.defaultRadius, 1.55);
+                    currentDrainRate = BALANCE.Light_Drain_Rate.val * areaFactor;
+                    battery = Math.max(0, battery - currentDrainRate * dt);
+                    beamActive = true;
+
+                    if (battery <= 0) {
+                        battery = 0;
+                        isOverheated = true;
+                        beamActive = false;
+                        spawnFloatingText(mouse.wx, mouse.wy, 'CAPACITOR OVERHEAT! RECHARGING...', '#F87171');
+                    }
+                } else {
+                    battery = Math.min(MAX_BATTERY, battery + BALANCE.Light_Regen_Rate.val * dt);
+                    if (isOverheated && battery >= LIGHT_CONFIG.overheatRecoveryThreshold) {
+                        isOverheated = false;
+                    }
+                }
+
+                // Cannon Cooldown & Mortar Shells
+                if (cannonCooldown > 0) {
+                    cannonCooldown = Math.max(0, cannonCooldown - dt);
+                }
+                for (let i = cannonShells.length - 1; i >= 0; i--) {
+                    const s = cannonShells[i];
+                    s.progress += dt / s.duration;
+                    if (s.progress >= 1.0) {
+                        detonateCannon(s.targetX, s.targetY);
+                        cannonShells.splice(i, 1);
+                    }
+                }
+
+                // Spawners
+                spawnTimers.ship -= dt;
+                if (spawnTimers.ship <= 0 && ships.length < 7) {
+                    ships.push(new CargoShip());
+                    spawnTimers.ship = Math.max(1.0, BALANCE.CargoShip_Spawn_Rate.val * (0.85 + Math.random() * 0.3));
+                }
+
+                spawnTimers.pirate -= dt;
+                if (spawnTimers.pirate <= 0 && pirates.length < 4) {
+                    pirates.push(new PirateRaider());
+                    spawnTimers.pirate = Math.max(2.0, BALANCE.PirateShip_Spawn_Rate.val * (0.85 + Math.random() * 0.3));
+                }
+
+                spawnTimers.kraken -= dt;
+                if (spawnTimers.kraken <= 0 && krakens.length < 3) {
+                    krakens.push(new KrakenMonster());
+                    spawnTimers.kraken = Math.max(3.0, BALANCE.Kraken_Spawn_Rate.val * (0.85 + Math.random() * 0.3));
+                }
+
+                spawnTimers.whirlpool -= dt;
+                if (spawnTimers.whirlpool <= 0) {
+                    const targetWpDensity = clamp(Math.round(BALANCE.Whirlpool_Hazard_Density.val), 0, 25);
+                    if (whirlpools.length < targetWpDensity) {
+                        whirlpools.push(createWhirlpoolInstance());
+                    } else if (whirlpools.length > 0) {
+                        const replaceIdx = Math.floor(Math.random() * whirlpools.length);
+                        whirlpools[replaceIdx] = createWhirlpoolInstance();
+                    }
+                    spawnTimers.whirlpool = Math.max(3.0, BALANCE.Whirlpool_Spawn_Rate.val);
+                }
+
+                for (let i = 0; i < whirlpools.length; i++) {
+                    whirlpools[i].angle -= whirlpools[i].spinSpeed * dt;
+                }
+
+                // Update Cargo Ships
+                for (let i = ships.length - 1; i >= 0; i--) {
+                    const s = ships[i];
+                    s.update(dt, beamActive, currentDrainRate, lightningLit);
+
+                    for (let r = 0; r < rocks.length; r++) {
+                        if (Math.hypot(s.x - rocks[r].x, s.y - rocks[r].y) < rocks[r].radius) {
+                            s.isDead = true;
+                            shipsLost++;
+                            spawnParticles(s.x, s.y, '#E0F2FE', 24);
+                            spawnFloatingText(s.x, s.y, 'WRECKED ON BASALT REEF!', '#F87171');
+                            break;
+                        }
+                    }
+
+                    if (!s.isDead) {
+                        for (let w = 0; w < whirlpools.length; w++) {
+                            if (Math.hypot(s.x - whirlpools[w].x, s.y - whirlpools[w].y) < whirlpools[w].killRadius) {
+                                s.isDead = true;
+                                shipsLost++;
+                                spawnParticles(s.x, s.y, '#2DD4BF', 24);
+                                spawnFloatingText(s.x, s.y, 'SWALLOWED BY MAELSTROM!', '#2DD4BF');
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!s.isDead && Math.hypot(s.x - HARBOR.x, s.y - HARBOR.y) <= HARBOR.radius) {
+                        let tier = 'D';
+                        let mult = 1.0;
+                        if (s.batterySpent <= 14) {
+                            tier = 'S+';
+                            mult = 5.0;
+                        } else if (s.batterySpent <= 28) {
+                            tier = 'A';
+                            mult = 3.5;
+                        } else if (s.batterySpent <= 45) {
+                            tier = 'B';
+                            mult = 2.5;
+                        } else if (s.batterySpent <= 68) {
+                            tier = 'C';
+                            mult = 1.5;
+                        }
+
+                        const pointsEarned = Math.round(s.basePoints * mult);
+                        score += pointsEarned;
+                        shipsSaved++;
+                        uiEco.innerText = `${tier} (${mult.toFixed(1)}x) +${pointsEarned}`;
+
+                        spawnParticles(s.x, s.y, '#2DD4BF', 28);
+                        spawnFloatingText(s.x, s.y, `DOCKED! +${pointsEarned} [ECO ${tier}]`, '#2DD4BF');
+                        s.isDead = true;
+                    }
+
+                    if (s.isDead) ships.splice(i, 1);
+                }
+
+                for (let i = pirates.length - 1; i >= 0; i--) {
+                    pirates[i].update(dt);
+                    if (pirates[i].isDead) pirates.splice(i, 1);
+                }
+
+                for (let i = krakens.length - 1; i >= 0; i--) {
+                    krakens[i].update(dt, beamActive);
+                    if (krakens[i].isDead) krakens.splice(i, 1);
+                }
+
+                for (let i = wakes.length - 1; i >= 0; i--) {
+                    wakes[i].radius += 12 * dt;
+                    wakes[i].alpha -= 0.48 * dt;
+                    if (wakes[i].alpha <= 0) wakes.splice(i, 1);
+                }
+
+                for (let i = blasts.length - 1; i >= 0; i--) {
+                    const b = blasts[i];
+                    b.radius += (b.maxRadius - b.radius) * 16 * dt;
+                    b.life -= dt * 1.9;
+                    if (b.life <= 0) blasts.splice(i, 1);
+                }
+
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.life -= dt;
+                    if (p.life <= 0) particles.splice(i, 1);
+                }
+
+                for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                    const ft = floatingTexts[i];
+                    ft.wy -= 22 * dt;
+                    ft.life -= dt;
+                    if (ft.life <= 0) floatingTexts.splice(i, 1);
+                }
+
+                for (let i = 0; i < rainDrops.length; i++) {
+                    const r = rainDrops[i];
+                    r.x += 130 * dt;
+                    r.y += r.speed * dt;
+                    if (r.y > canvas.height) {
+                        r.y = -20;
+                        r.x = Math.random() * canvas.width;
+                    }
+                    if (r.x > canvas.width) r.x = 0;
+                }
+
+                // Sync HUD
+                uiScore.innerText = score;
+                uiSaved.innerText = shipsSaved;
+                uiLost.innerText = shipsLost;
+
+                const totalResolved = shipsSaved + shipsLost;
+                const currentRatio = totalResolved > 0 ? Math.round((shipsSaved / totalResolved) * 100) : 100;
+                const requiredRatio = Math.round(BALANCE.Save_Ships_Ratio.val);
+                if (uiSaveRatio) {
+                    uiSaveRatio.innerText = `${currentRatio}% / ${requiredRatio}%`;
+                    uiSaveRatio.className = currentRatio >= requiredRatio
+                        ? 'text-teal-300 mono'
+                        : 'text-rose-400 mono';
+                }
+                if (uiLevelTimer) {
+                    uiLevelTimer.innerText = `${levelTimeRemaining.toFixed(1)}s`;
+                }
+
+                uiWindSpeed.innerText = `${Math.round(wind.speed)} u/s`;
+                uiWindDir.innerText = `Gust ${Math.round((wind.angle * 180) / Math.PI)}°`;
+                uiBeamRadius.innerText = `${Math.round(lightRadius)}u (Scroll)`;
+                uiLightning.innerText = lightningLit ? 'FLASH!' : `${lightning.timer.toFixed(1)}s`;
+
+                const pct = Math.round((battery / MAX_BATTERY) * 100);
+                uiBatteryFill.style.transform = `scaleX(${battery / MAX_BATTERY})`;
+                uiBatteryText.innerText = `${Math.round(battery)} / ${MAX_BATTERY} (${pct}%)`;
+
+                if (isOverheated) {
+                    uiBatteryLabel.innerText = '⚠ OVERHEATED — COOLING DOWN';
+                    uiBatteryLabel.className = 'font-display-nautical text-sm text-rose-400 font-bold';
+                    uiBatteryFill.classList.add('battery-overheat');
+                } else {
+                    uiBatteryLabel.innerText = 'Fresnel Beacon Capacitor';
+                    uiBatteryLabel.className = 'font-display-nautical text-sm text-amber-200';
+                    uiBatteryFill.classList.remove('battery-overheat');
+                }
+
+                if (cannonCooldown > 0) {
+                    uiCannon.innerText = `RELOAD ${cannonCooldown.toFixed(1)}s`;
+                    uiCannon.className = 'text-sm font-extrabold text-amber-300 mono';
+                } else {
+                    uiCannon.innerText = 'READY (R-CLICK)';
+                    uiCannon.className = 'text-sm font-extrabold text-teal-300 mono';
+                }
+            }
+
+            // Draw Top-Down 2D Safe Harbor Breakwater (#9) & Lighthouse Promontory (#8)
+            function drawHarborAndLighthouse(ctx) {
+                const hPos = worldToScreen(HARBOR.x, HARBOR.y);
+                const hRad = HARBOR.radius * worldScale;
+
+                // 1. Bioluminescent Harbor Sanctuary Glow (#2DD4BF)
+                const hGrad = ctx.createRadialGradient(hPos.x, hPos.y, 4, hPos.x, hPos.y, hRad * 1.2);
+                hGrad.addColorStop(0, 'rgba(45, 212, 191, 0.38)');
+                hGrad.addColorStop(0.7, 'rgba(45, 212, 191, 0.16)');
+                hGrad.addColorStop(1, 'rgba(45, 212, 191, 0)');
+                ctx.fillStyle = hGrad;
+                ctx.beginPath();
+                ctx.arc(hPos.x, hPos.y, hRad * 1.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 2. External Asset #9 (`safeHarbor`) or Vector Breakwater Ring
+                if (SPRITES.safeHarbor) {
+                    const ringSize = hRad * 2.25;
+                    ctx.drawImage(SPRITES.safeHarbor, hPos.x - ringSize * 0.5, hPos.y - ringSize * 0.5, ringSize, ringSize);
+                } else {
+                    ctx.strokeStyle = `rgba(45, 212, 191, ${0.72 + Math.sin(globalTime * 3) * 0.2})`;
+                    ctx.lineWidth = 2.6;
+                    ctx.setLineDash([8, 6]);
+                    ctx.beginPath();
+                    ctx.arc(hPos.x, hPos.y, hRad, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    for (let i = 0; i < 8; i++) {
+                        const ang = (i / 8) * Math.PI * 2 + globalTime * 0.25;
+                        const bx = hPos.x + Math.cos(ang) * hRad;
+                        const by = hPos.y + Math.sin(ang) * hRad;
+                        ctx.fillStyle = i % 2 === 0 ? '#2DD4BF' : '#F59E0B';
+                        ctx.beginPath();
+                        ctx.arc(bx, by, 3.4 * worldScale, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                ctx.font = '700 11px "IM Fell English SC", serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#E0F2FE';
+                ctx.fillText('SAFE HARBOR (45u)', hPos.x, hPos.y + 4);
+
+                // 3. External Asset #8 (`lighthouseIsland`) or Vector Promontory
+                const lhPos = worldToScreen(LIGHTHOUSE.x, LIGHTHOUSE.y);
+                const s = worldScale;
+
+                const foamR = (38 + Math.sin(globalTime * 2.6) * 3) * s;
+                ctx.strokeStyle = 'rgba(224, 242, 254, 0.45)';
+                ctx.lineWidth = 2.2 * s;
+                ctx.beginPath();
+                ctx.arc(lhPos.x, lhPos.y, foamR, 0, Math.PI * 2);
+                ctx.stroke();
+
+                if (SPRITES.lighthouseIsland) {
+                    const lhSize = 76 * s;
+                    ctx.drawImage(SPRITES.lighthouseIsland, lhPos.x - lhSize * 0.5, lhPos.y - lhSize * 0.5, lhSize, lhSize);
+                } else {
+                    ctx.fillStyle = '#475569';
+                    ctx.strokeStyle = '#030914';
+                    ctx.lineWidth = 2.4 * s;
+                    ctx.beginPath();
+                    ctx.arc(lhPos.x, lhPos.y, 32 * s, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#F8FAFC';
+                    ctx.beginPath();
+                    ctx.arc(lhPos.x, lhPos.y, 16 * s, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#DC2626';
+                    ctx.beginPath();
+                    ctx.arc(lhPos.x, lhPos.y, 11 * s, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Brass Fresnel Lantern Dome aiming toward cursor (#F59E0B & #FEF08A)
+                const aimAngle = Math.atan2(mouse.wy - LIGHTHOUSE.y, mouse.wx - LIGHTHOUSE.x);
+                ctx.save();
+                ctx.translate(lhPos.x, lhPos.y);
+                ctx.rotate(aimAngle);
+                ctx.fillStyle = '#F59E0B';
+                ctx.fillRect(4 * s, -4 * s, 10 * s, 8 * s);
+                ctx.restore();
+
+                ctx.fillStyle = '#FEF08A';
+                ctx.beginPath();
+                ctx.arc(lhPos.x, lhPos.y, 6.5 * s, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            function render() {
+                ctx.save();
+                ctx.translate(lightning.shakeX, lightning.shakeY);
+
+                // 1. Moonlit Sea-Chart Ocean Surface (External Asset #10 `oceanTile` or High-Visibility Vector Tile)
+                if (SPRITES.waterPattern) {
+                    ctx.save();
+                    ctx.translate(waterScrollX, waterScrollY);
+                    ctx.fillStyle = SPRITES.waterPattern;
+                    ctx.fillRect(-waterScrollX - 256, -waterScrollY - 256, canvas.width + 512, canvas.height + 512);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = '#0B192C';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+
+                // 2. Antique Brass Nautical Sea-Chart Compass Grid (#F59E0B)
+                const gridAlpha = 0.08 + lightning.flashAlpha * 0.14;
+                ctx.strokeStyle = `rgba(245, 158, 11, ${gridAlpha})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let g = -WORLD_LIMIT; g <= WORLD_LIMIT; g += 60) {
+                    const p1 = worldToScreen(g, -WORLD_LIMIT);
+                    const p2 = worldToScreen(g, WORLD_LIMIT);
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+
+                    const p3 = worldToScreen(-WORLD_LIMIT, g);
+                    const p4 = worldToScreen(WORLD_LIMIT, g);
+                    ctx.moveTo(p3.x, p3.y);
+                    ctx.lineTo(p4.x, p4.y);
+                }
+                ctx.stroke();
+
+                // 3. Swirling Whirlpools (External Asset #7 `whirlpool`)
+                for (let i = 0; i < whirlpools.length; i++) {
+                    const wp = whirlpools[i];
+                    const pos = worldToScreen(wp.x, wp.y);
+                    const pullR = wp.pullRadius * worldScale;
+
+                    ctx.save();
+                    ctx.translate(pos.x, pos.y);
+                    ctx.rotate(wp.angle);
+                    if (SPRITES.whirlpool) {
+                        const dSize = pullR * 2.05;
+                        ctx.drawImage(SPRITES.whirlpool, -dSize * 0.5, -dSize * 0.5, dSize, dSize);
+                    }
+                    ctx.restore();
+
+                    ctx.strokeStyle = 'rgba(45, 212, 191, 0.25)';
+                    ctx.lineWidth = 1.2;
+                    ctx.setLineDash([4, 5]);
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, pullR, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // 4. Trailing Ship Wakes
+                for (let i = 0; i < wakes.length; i++) {
+                    const wk = wakes[i];
+                    const pos = worldToScreen(wk.x, wk.y);
+                    ctx.strokeStyle = `${wk.color}${wk.alpha})`;
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, wk.radius * worldScale, wk.angle + 1.8, wk.angle + 4.5);
+                    ctx.stroke();
+                }
+
+                // 5. Basalt Reef Rocks (External Asset #6 `rock` with Crashing Seafoam #E0F2FE)
+                for (let i = 0; i < rocks.length; i++) {
+                    const r = rocks[i];
+                    const pos = worldToScreen(r.x, r.y);
+                    const foamPulse = (Math.sin(globalTime * 2.8 + r.foamPhase) * 0.5 + 0.5);
+                    const foamRad = (r.radius + 4 + foamPulse * 7) * worldScale;
+
+                    ctx.strokeStyle = `rgba(224, 242, 254, ${0.52 * (1 - foamPulse * 0.55)})`;
+                    ctx.lineWidth = 2.2 * worldScale;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, foamRad, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    const rockSprite = SPRITES.rock || SPRITES.rockVariants[r.variant];
+                    if (rockSprite) {
+                        const sz = r.radius * 3.0 * worldScale;
+                        ctx.save();
+                        ctx.translate(pos.x, pos.y);
+                        ctx.rotate(r.angle || 0);
+                        ctx.drawImage(rockSprite, -sz * 0.5, -sz * 0.5, sz, sz);
+                        ctx.restore();
+                    }
+                }
+
+                // 6. Safe Harbor (#9) & Lighthouse Promontory (#8)
+                drawHarborAndLighthouse(ctx);
+
+                // 7. 2D Krakens (#5), Pirate Raiders (#4) & Cargo Ships (#1–#3)
+                for (let i = 0; i < krakens.length; i++) krakens[i].draw(ctx);
+                for (let i = 0; i < pirates.length; i++) pirates[i].draw(ctx);
+                for (let i = 0; i < ships.length; i++) ships[i].draw(ctx);
+
+                // 8. High-Visibility Moonlit Sea-Chart Overlay (42% darkness cap instead of 85% for playability)
+                const beamActive = mouse.leftDown && !isOverheated && battery > 0;
+                const cursorScreen = worldToScreen(mouse.wx, mouse.wy);
+                const spotR = lightRadius * worldScale;
+                const hPos = worldToScreen(HARBOR.x, HARBOR.y);
+                const lhPos = worldToScreen(LIGHTHOUSE.x, LIGHTHOUSE.y);
+
+                const nightAlpha = Math.max(0.04, 0.42 - lightning.flashAlpha * 0.38);
+
+                ctx.save();
+                ctx.fillStyle = `rgba(3, 9, 20, ${nightAlpha})`;
+                ctx.beginPath();
+                ctx.rect(0, 0, canvas.width, canvas.height);
+
+                // Safe Harbor Sanctuary Cutout
+                const hCutR = (HARBOR.radius + 16) * worldScale;
+                ctx.moveTo(hPos.x + hCutR, hPos.y);
+                ctx.arc(hPos.x, hPos.y, hCutR, 0, Math.PI * 2);
+
+                // Lighthouse Lantern Cutout
+                const lhCutR = 38 * worldScale;
+                ctx.moveTo(lhPos.x + lhCutR, lhPos.y);
+                ctx.arc(lhPos.x, lhPos.y, lhCutR, 0, Math.PI * 2);
+
+                // Active Spotlight Cutout
+                if (beamActive) {
+                    const bCutR = spotR * 1.18;
+                    ctx.moveTo(cursorScreen.x + bCutR, cursorScreen.y);
+                    ctx.arc(cursorScreen.x, cursorScreen.y, bCutR, 0, Math.PI * 2);
+                }
+
+                // Cannon Blast Cutouts
+                for (let i = 0; i < blasts.length; i++) {
+                    const b = blasts[i];
+                    const bPos = worldToScreen(b.x, b.y);
+                    const bCutR = b.radius * 1.35 * worldScale;
+                    ctx.moveTo(bPos.x + bCutR, bPos.y);
+                    ctx.arc(bPos.x, bPos.y, bCutR, 0, Math.PI * 2);
+                }
+
+                ctx.fill('evenodd');
+                ctx.restore();
+
+                // 9. Volumetric 2D Lighthouse Beam Cone (#FEF08A Warm Ivory-Yellow)
+                if (beamActive) {
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'screen';
+
+                    const spotGrad = ctx.createRadialGradient(
+                        cursorScreen.x, cursorScreen.y, 2,
+                        cursorScreen.x, cursorScreen.y, spotR * 1.18
+                    );
+                    spotGrad.addColorStop(0, 'rgba(254, 240, 138, 0.65)');
+                    spotGrad.addColorStop(0.65, 'rgba(245, 158, 11, 0.28)');
+                    spotGrad.addColorStop(1, 'rgba(245, 158, 11, 0.0)');
+                    ctx.fillStyle = spotGrad;
+                    ctx.beginPath();
+                    ctx.arc(cursorScreen.x, cursorScreen.y, spotR * 1.18, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const beamAngle = Math.atan2(cursorScreen.y - lhPos.y, cursorScreen.x - lhPos.x);
+                    const perpX = -Math.sin(beamAngle) * spotR;
+                    const perpY = Math.cos(beamAngle) * spotR;
+
+                    const coneGrad = ctx.createLinearGradient(lhPos.x, lhPos.y, cursorScreen.x, cursorScreen.y);
+                    coneGrad.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+                    coneGrad.addColorStop(1, 'rgba(254, 240, 138, 0.08)');
+                    ctx.fillStyle = coneGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(lhPos.x, lhPos.y);
+                    ctx.lineTo(cursorScreen.x + perpX, cursorScreen.y + perpY);
+                    ctx.lineTo(cursorScreen.x - perpX, cursorScreen.y - perpY);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.restore();
+                }
+
+                // 10. Mortar Shells & Detonation Rings
+                for (let i = 0; i < cannonShells.length; i++) {
+                    const s = cannonShells[i];
+                    const wx = s.startX + (s.targetX - s.startX) * s.progress;
+                    const wy = s.startY + (s.targetY - s.startY) * s.progress;
+                    const pos = worldToScreen(wx, wy);
+                    const arcLift = Math.sin(s.progress * Math.PI) * 38 * worldScale;
+
+                    ctx.fillStyle = 'rgba(3, 9, 20, 0.5)';
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 3.5 * worldScale, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#FEF08A';
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y - arcLift, 4.5 * worldScale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                for (let i = 0; i < blasts.length; i++) {
+                    const b = blasts[i];
+                    const pos = worldToScreen(b.x, b.y);
+                    const r = b.radius * worldScale;
+                    ctx.fillStyle = `rgba(249, 115, 22, ${b.life * 0.45})`;
+                    ctx.strokeStyle = `rgba(254, 240, 138, ${b.life * 0.95})`;
+                    ctx.lineWidth = 2.2;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                // 11. Particles
+                for (let i = 0; i < particles.length; i++) {
+                    const p = particles[i];
+                    const pos = worldToScreen(p.x, p.y);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = clamp(p.life, 0, 1);
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 2.6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1.0;
+
+                // 12. 2D Brass Nautical Reticle (#F59E0B Outer Ring + 30u Surgical Mortar Ring)
+                const cannonR = CANNON_AOE_RADIUS * worldScale;
+                let friendlyFireRisk = false;
+                for (let i = 0; i < ships.length; i++) {
+                    if (Math.hypot(ships[i].x - mouse.wx, ships[i].y - mouse.wy) <= CANNON_AOE_RADIUS) {
+                        friendlyFireRisk = true;
+                        break;
+                    }
+                }
+
+                ctx.strokeStyle = beamActive
+                    ? '#FEF08A'
+                    : 'rgba(245, 158, 11, 0.55)';
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                ctx.arc(cursorScreen.x, cursorScreen.y, spotR, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.strokeStyle = friendlyFireRisk
+                    ? '#DC2626'
+                    : (cannonCooldown <= 0 ? '#2DD4BF' : 'rgba(148, 163, 184, 0.35)');
+                ctx.lineWidth = friendlyFireRisk ? 2.4 : 1.5;
+                ctx.setLineDash([5, 4]);
+                ctx.beginPath();
+                ctx.arc(cursorScreen.x, cursorScreen.y, cannonR, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = friendlyFireRisk ? '#DC2626' : '#FEF08A';
+                ctx.beginPath();
+                ctx.arc(cursorScreen.x, cursorScreen.y, 2.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (friendlyFireRisk) {
+                    ctx.font = '700 10px "Cinzel", serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#FCA5A5';
+                    ctx.fillText('⚠ FRIENDLY FIRE RISK (30u)', cursorScreen.x, cursorScreen.y - Math.max(spotR, cannonR) - 8);
+                }
+
+                // 13. Dramatic World Callouts in IM Fell English SC
+                for (let i = 0; i < floatingTexts.length; i++) {
+                    const ft = floatingTexts[i];
+                    const pos = worldToScreen(ft.wx, ft.wy);
+                    ctx.save();
+                    ctx.font = '400 15px "IM Fell English SC", serif';
+                    ctx.textAlign = 'center';
+                    ctx.globalAlpha = clamp(ft.life / ft.maxLife, 0, 1);
+                    ctx.fillStyle = '#030914';
+                    ctx.fillText(ft.text, pos.x + 1.5, pos.y + 1.5);
+                    ctx.fillStyle = ft.color;
+                    ctx.fillText(ft.text, pos.x, pos.y);
+                    ctx.restore();
+                }
+
+                // 14. Storm Rain (#1E293B / #E0F2FE) & Forked Lightning Squall Flash (#93C5FD)
+                ctx.strokeStyle = 'rgba(224, 242, 254, 0.16)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let i = 0; i < rainDrops.length; i++) {
+                    const r = rainDrops[i];
+                    ctx.moveTo(r.x, r.y);
+                    ctx.lineTo(r.x + 4, r.y + r.len);
+                }
+                ctx.stroke();
+
+                if (lightning.flashAlpha > 0) {
+                    ctx.fillStyle = `rgba(147, 197, 253, ${lightning.flashAlpha * 0.25})`;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    ctx.strokeStyle = `rgba(224, 242, 254, ${lightning.flashAlpha})`;
+                    ctx.lineWidth = 2.6;
+                    for (let b = 0; b < lightning.bolts.length; b++) {
+                        const bolt = lightning.bolts[b];
+                        ctx.beginPath();
+                        for (let i = 0; i < bolt.length; i++) {
+                            if (i === 0) ctx.moveTo(bolt[i].x, bolt[i].y);
+                            else ctx.lineTo(bolt[i].x, bolt[i].y);
+                        }
+                        ctx.stroke();
+                    }
+                }
+
+                ctx.restore();
+            }
+
+            // ============================================================================
+            // 9. EVENT LISTENERS & MANUAL ASSET FOLDER PICKER
+            // ============================================================================
+            window.addEventListener('resize', updateCanvasSize);
+
+            window.addEventListener('mousemove', (e) => {
+                mouse.sx = e.clientX;
+                mouse.sy = e.clientY;
+                const wPos = screenToWorld(mouse.sx, mouse.sy);
+                const dx = wPos.x - mouse.wx;
+                const dy = wPos.y - mouse.wy;
+                if (Math.hypot(dx, dy) > 0.15) {
+                    mouse.vx = dx;
+                    mouse.vy = dy;
+                }
+                mouse.wx = wPos.x;
+                mouse.wy = wPos.y;
+            });
+
+            window.addEventListener('mousedown', (e) => {
+                if (e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('#sheet-drawer'))) return;
+
+                if (e.button === 0) {
+                    mouse.leftDown = true;
+                } else if (e.button === 2) {
+                    if (cannonCooldown <= 0) {
+                        fireDefenseCannon(mouse.wx, mouse.wy);
+                    } else {
+                        spawnFloatingText(mouse.wx, mouse.wy, `MORTAR RELOADING (${cannonCooldown.toFixed(1)}s)`, '#FCA5A5');
+                    }
+                }
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (e.button === 0) mouse.leftDown = false;
+            });
+
+            window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            window.addEventListener('wheel', (e) => {
+                if (e.target && e.target.closest('#sheet-drawer')) return;
+                lightRadius = clamp(
+                    lightRadius - e.deltaY * 0.035,
+                    LIGHT_CONFIG.minRadius,
+                    LIGHT_CONFIG.maxRadius
+                );
+            }, { passive: true });
+
+            btnRestart.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resetGame();
+            });
+
+            btnHelp.addEventListener('click', (e) => {
+                e.stopPropagation();
+                helpDrawer.classList.toggle('hidden');
+            });
+
+            btnSheet.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sheetDrawer.classList.toggle('hidden');
+            });
+
+            btnCloseSheet.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sheetDrawer.classList.add('hidden');
+            });
+
+            btnLoadFile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const buf = ev.target.result;
+                    parseArrayBufferSpreadsheet(buf, `${SPREADSHEET_DIR_WINDOWS}\\${file.name}`);
+                    sheetDrawer.classList.remove('hidden');
+                };
+                reader.readAsArrayBuffer(file);
+                fileInput.value = '';
+            });
+
+            // Batch-loader for selecting the 10 ChatGPT DALL-E images from C:\GitHub_Desktop\Lighthouse_AI_Game\Assets
+            btnLoadAssets.addEventListener('click', (e) => {
+                e.stopPropagation();
+                assetsFileInput.click();
+            });
+
+            assetsFileInput.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files || []);
+                if (!files.length) return;
+
+                // Match each file to its trailing "-1" .. "-10" number (or sort naturally by number)
+                files.forEach((file) => {
+                    const match = file.name.match(/-(\d+)\.[a-zA-Z0-9]+$/) || file.name.match(/(\d+)\.[a-zA-Z0-9]+$/);
+                    if (match) {
+                        const idx = parseInt(match[1], 10);
+                        const spec = ASSET_MANIFEST.find((m) => m.index === idx);
+                        if (spec) {
+                            const url = URL.createObjectURL(file);
+                            const img = new Image();
+                            img.onload = () => {
+                                bindLoadedAssetToSlot(img, spec);
+                                URL.revokeObjectURL(url);
+                                SPRITES.externalLoadedCount = Math.min(10, SPRITES.externalLoadedCount + 1);
+                                if (uiSheetStatus) {
+                                    uiSheetStatus.innerText = `Assets: ${SPRITES.externalLoadedCount}/10 Loaded`;
+                                }
+                            };
+                            img.src = url;
+                        }
+                    }
+                });
+
+                spawnFloatingText(HARBOR.x, HARBOR.y, `LOADING ${files.length} CUSTOM ASSETS...`, '#FEF08A');
+                assetsFileInput.value = '';
+            });
+
+            btnExportXlsx.addEventListener('click', (e) => {
+                e.stopPropagation();
+                exportSpreadsheetFile('xlsx');
+            });
+
+            btnExportCsv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                exportSpreadsheetFile('csv');
+            });
+
+            btnRetryFetch.addEventListener('click', (e) => {
+                e.stopPropagation();
+                autoProbeExternalAssetsFolder();
+                autoProbeSpreadsheetFolder();
+            });
+
+            btnApplySheet.addEventListener('click', (e) => {
+                e.stopPropagation();
+                syncBalanceObjectFromRows();
+                levelTimeRemaining = BALANCE.Level_Duration.val;
+                rebuildStaticHazardsFromSpreadsheet();
+                spawnFloatingText(HARBOR.x, HARBOR.y, 'SPREADSHEET BALANCE APPLIED!', '#2DD4BF');
+            });
+
+            function mainLoop(now) {
+                const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+                lastFrameTime = now;
+                globalTime += dt;
+
+                update(dt);
+                render();
+
+                requestAnimationFrame(mainLoop);
+            }
+
+            // Initialize 2D Sprite Atlas, dimensions, spreadsheet UI, and start immediately
+            updateCanvasSize();
+            initAllSprites();
+            renderSpreadsheetTableUI();
+            initRain();
+            resetGame();
+            autoProbeSpreadsheetFolder();
+            requestAnimationFrame(mainLoop);
+        })();
+    </script>
+</body>
+</html>

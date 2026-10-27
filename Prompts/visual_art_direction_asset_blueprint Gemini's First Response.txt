@@ -1,0 +1,170 @@
+# Beacon of the Storm — Visual Art Direction & 2D Asset Blueprint
+
+Because you are building a top-down nighttime game where the player only sees small pockets of the ocean at a time, 
+**visual design is not just decoration—it is gameplay readability.** When a player flashes their lighthouse beam for $0.3$ seconds, 
+their brain must instantly recognize whether they are looking at a friendly Cargo Ship, a Pirate Raider, a Kraken, or a jagged Rock.
+
+This guide breaks down every visual decision step-by-step so you can choose the exact look and feel of your game before we create or import external artwork files.
+
+---
+
+## Step 1: Choose Your Core Art Style (Pick One)
+
+As a non-designer, the easiest way to establish a cohesive look is to pick **one** of these three proven 2D indie game styles:
+
+| Art Style Option | Visual Reference Games | Look & Feel | Pros for Your Game |
+| :--- | :--- | :--- | :--- |
+| **Option A: Painterly Dark Nautical (Recommended)** | *Dredge*, *Sunless Sea*, *Darkest Dungeon* | Gritty, atmospheric, 
+hand-painted brushstrokes with warm golden lantern light cutting through cold, eldritch ocean ink. | Maximum atmosphere; 
+makes the storm and Kraken feel genuinely menacing while the harbor feels warm and safe. |
+
+| **Option B: Crisp Illustrated Vector / Sea-Chart** | *Mini Metro*, *Bad North*, *FTL* | Clean, sharp geometric silhouettes with bold outlines 
+and antique brass nautical chart lines. | Highest possible gameplay clarity at any zoom level; easiest to generate programmatically as crisp `.svg` / `.png` 
+sprites. |
+
+| **Option C: Modern HD Pixel Art** | *Sea of Stars*, *Hyper Light Drifter*, *Carrion* | Hand-crafted pixel sprites ($64 \times 64$ or $128 \times 128$) 
+paired with smooth modern dynamic lighting and bloom. | Strong indie nostalgia; very distinct visual identity if migrating to Unity 2D later. |
+
+> **Designer's Advice:** If you want tension and immersion, choose **Option A (Painterly Dark Nautical)**. If you want razor-sharp arcade readability and 
+clean scalable files, choose **Option B (Crisp Illustrated Vector)**.
+
+---
+
+## Step 2: The Master Color Palette (Functional Color Coding)
+
+In a dark game, **never mix warm and cool colors randomly.** We use a strict **60-30-10 Color Rule** where every color has a specific gameplay meaning:
+
+### 1. The Environment (60% of the Screen — Cold, Dark, Receding)
+The ocean and storm must stay in deep, desaturated cool tones so that ships, hazards, and light beams pop effortlessly on top of them.
+* **Abyssal Midnight (Deep Water Base):** `#030914`
+* **Trench Navy (Mid-Water Swells):** `#07162C`
+* **Storm Slate (Wave Crests & Rain):** `#1E293B`
+* **Lightning Squall Flash (Sky Tint):** `#93C5FD` (at $20\%$–$30\%$ opacity)
+
+### 2. Player Light, UI & Safe Sanctuary (30% — Warm Brass & Safe Teal)
+* **Fresnel Beam Core (Active Spotlight):** `#FEF08A` (Warm Ivory-Yellow)
+* **Weathered Brass (UI Frames & Reticle):** `#F59E0B` (Rich Amber Gold)
+* **Harbor Sanctuary Glow (Safe Zone & Locked Course):** `#2DD4BF` (Bioluminescent Seafoam Teal)
+* **Sea-Glass Panel Fill (Transparent HUD):** `#040C18` at $22\%$ opacity
+
+### 3. Threats & Entities (10% — High-Contrast Signal Colors)
+* **Friendly Cargo Ships:** Warm Cedar/Oak (`#92400E`), Cream Canvas Sails (`#FEF3C7`), and a **Teal/Gold Prow Lantern** (`#2DD4BF` / `#FDE047`).
+* **Pirate Raiders (Cannon Targets):** Charred Pitch-Black Hulls (`#18181B`) with **Blood Crimson Sails** (`#DC2626`) and an Orange Deck Brazier (`#F97316`).
+* **Kraken Monsters (Light-Repel Targets):** Deep Eldritch Violet (`#7E22CE`), Bioluminescent Magenta Suckers (`#D8B4FE`), and **Venom Green Eyes** (`#4ADE80`).
+* **Static Hazards (Rocks & Whirlpools):** Cold Basalt Grey (`#475569`) surrounded by **Bright Crashing Seafoam White** (`#E0F2FE`) 
+so the edge of the hazard is unmistakable.
+
+---
+
+## Step 3: Game Object Design Blueprints (2D Top-Down Sprites)
+
+### The Golden Technical Rule for 2D Sprites
+Every moving ship sprite should be drawn from a **direct top-down overhead view**, facing **East / Right ($0^\circ$)** on a transparent `.png` or `.svg` canvas. 
+This allows both HTML5 Canvas and Unity to rotate the sprite smoothly across all $360^\circ$ to match your `lastLightDir` vector.
+
+---
+
+### 1. Friendly Cargo Ships (3 Distinct Silhouettes)
+Even without reading text, a player should know a ship's speed class by its **hull width** and **number of masts**:
+
+* **Class 1: Swift Cutter (Fast / Agile)**
+  * **Canvas Size:** $128 \times 96\text{ px}$
+  * **Silhouette:** Narrow, teardrop racing hull with a long front bowsprit pole.
+  * **Deck & Sails:** Light teak wood deck, **1 single billowing cream sail**, and a bright teal stripe along the gunwale.
+* **Class 2: Merchant Brig (Balanced Hauler)**
+  * **Canvas Size:** $128 \times 96\text{ px}$
+  * **Silhouette:** Medium-width rounded hull with a raised stern cabin.
+  * **Deck & Sails:** Medium oak deck with visible wooden cargo crates lashed to the center hatch, and **2 cream-gold sails** (fore and main mast).
+* **Class 3: Heavy Galleon (Slow / High-Value Treasure Ship)**
+  * **Canvas Size:** $144 \times 108\text{ px}$
+  * **Silhouette:** Wide, imposing fortress-like hull with an ornate gold-trimmed stern castle.
+  * **Deck & Sails:** Mahogany deck, emerald-and-gold canopy accents, and **3 wide canvas sails**.
+
+---
+
+### 2. Enemy Designs: Pirate Raider & Kraken
+
+* **Pirate Raider (The Hunter)**
+  * **Canvas Size:** $128 \times 96\text{ px}$
+  * **Visual Hooks:**
+    1. **Spiked Iron Bow Ram:** Instead of a wooden bowsprit, the front of the ship has a jagged dark-iron ram.
+    2. **Tattered Crimson Sails:** Deep red sails with ragged torn edges and a stark white skull/crossbones emblem on the main sail.
+    3. **Charred Wood Hull:** Scorched dark-charcoal planking so it looks immediately hostile next to the warm brown cargo ships.
+* **The Kraken (The Abyssal Lurker)**
+  * **Canvas Size:** $160 \times 160\text{ px}$
+  * **Visual Hooks:**
+    1. **Modular or Animated Design:** Best built as **1 central cephalopod head/mantle sprite** (with two glowing green eyes and mottled purple spots) 
+	surrounded by **8 curved tentacle sprites** (or a 4-frame idle animation sheet).
+    2. **State Change:** When hit by the lighthouse beam, its bioluminescent spots shift from **Violet (`#A855F7`)** to **Warning Coral-Red (`#FB7185`)** 
+	to show it is being burned/repelled by the light.
+
+---
+
+### 3. Static Hazards: Jagged Rocks & Whirlpools
+
+* **Jagged Basalt Rocks (3 Modular Variants: Small, Medium, Cluster)**
+  * **Canvas Size:** $128 \times 128\text{ px}$
+  * **Visual Structure (3 Layers in One Sprite):**
+    1. *Bottom Layer:* Semi-transparent turquoise-teal submerged reef shelf (`#0D9488` at $30\%$ opacity) showing shallow water.
+    2. *Middle Layer:* White frothy seafoam ring (`#E0F2FE`) that expands and contracts slightly.
+    3. *Top Layer:* Sharp, angular dark-slate rock facets with crisp upper-left highlights so they look sharp and dangerous.
+* **Abyssal Whirlpool (Rotating Vortex Sprite)**
+  * **Canvas Size:** $256 \times 256\text{ px}$
+  * **Visual Structure:**
+    1. Pitch-black center "eye" (`#010308`) that fades outward into deep cyan-teal.
+    2. Four logarithmic spiral arms of white/cyan froth.
+    3. *Engine Trick:* You only need **1 static PNG** for the whirlpool! Rotating that single image continuously in code creates a hypnotic spinning maelstrom.
+
+---
+
+### 4. The Lighthouse & Safe Harbor
+
+* **The Lighthouse Promontory ($256 \times 256\text{ px}$):**
+  * A rugged granite cliff island with crashing white surf on its edges, a circular stone keep base, a classic red-and-white spiral masonry tower viewed from above, 
+  and a rotating brass Fresnel lens dome that points toward your mouse cursor.
+* **The Safe Harbor Ring ($256 \times 256\text{ px}$):**
+  * Curved wooden breakwater piers/jetties forming a protective cove, lit by warm floating brass-and-teal lantern buoys around the $45\text{u}$ perimeter.
+
+---
+
+## Step 4: Typography System
+
+To give the game a true nautical identity without sacrificing number readability during frantic storms, use this 3-font pairing 
+(all free on Google Fonts and downloadable as `.ttf` for Unity):
+
+1. **Display & Headers (`Cinzel` or `IM Fell English SC`):**
+   * Used for *Harbor Ledger*, *Fresnel Beacon*, and floating callouts (`DOCKED!`, `CORSAIR SUNK!`). Gives an engraved brass-plaque feel.
+2. **UI Labels (`Plus Jakarta Sans` or `Inter`):**
+   * Used for button labels, instructions, and tooltips. Ultra-clean at small sizes (`10px`–`12px`).
+3. **Live Numbers & Telemetry (`JetBrains Mono`):**
+   * Used for Score, Shift Timer (`180.0s`), Save Ratio (`65%`), Wind Speed (`24 u/s`), and Spreadsheet values. Because every digit has the exact same width, 
+   numbers never jitter when counting down.
+
+---
+
+## Step 5: Textures & Atmospheric Overlays
+
+To make the flat 2D screen feel like a living ocean, you only need **3 lightweight texture files**:
+1. **`ocean_tile_512.png` ($512 \times 512\text{ px}$ Seamless Tile):** Deep navy water with subtle hand-painted wave troughs that scrolls in the 
+direction of the storm crosswind.
+2. **`foam_caustics_512.png` ($512 \times 512\text{ px}$ Seamless Overlay):** Subtle translucent water ripples that scroll at a slightly different 
+angle to create depth.
+3. **`vignette_grain.png`:** A subtle dark edge vignette that frames the screen like looking through a storm-battered spyglass.
+
+---
+
+## Step 6: How Would You Like to Create the External Art Files?
+
+Since you don't need to draw these yourself, we have **three ways** to get the actual external `.png` / `.svg` files into your 
+`C:\GitHub_Desktop\Lighthouse_AI_Game\Assets` folder:
+
+1. **Option 1 — I Generate the External Asset Pack for You Right Here (Fastest & Custom-Fit):**
+   * Using Python vector/image rendering, I can generate a complete downloadable `.zip` archive containing high-resolution transparent `.png` and `.svg` 
+   files for every object above (`cargo_cutter.png`, `cargo_brig.png`, `cargo_galleon.png`, `pirate_raider.png`, `kraken.png`, `rock_1..3.png`, `whirlpool.png`, 
+   `lighthouse.png`, `ocean_tile.png`, plus a `Palette.png` swatch sheet).
+2. **Option 2 — AI Art Generation Prompts (If You Use Midjourney / Leonardo / DALL-E):**
+   * If you want hand-painted AI textures, I can write exact copy-paste prompts engineered for **flat 2D top-down game sprites on isolated backgrounds** 
+   so you can generate and drop them in.
+3. **Option 3 — Free Commercial-Ready Indie Asset Packs (CC0 Public Domain):**
+   * We can pair custom sprites with proven CC0 packs like **Kenney's "Pirate Pack"** (which includes top-down wooden ships, 
+   pirate sails, cannonballs, rocks, andfortifications already sliced as transparent PNGs).
