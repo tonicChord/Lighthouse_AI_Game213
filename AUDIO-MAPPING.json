@@ -1,0 +1,46 @@
+{
+  "storm": [
+    "Storm_#1-1794249932683.mp3",
+    "Storm_#3-1794249516994.mp3"
+  ],
+  "cannon": [
+    "Cannon_#2-1794231765871.mp3",
+    "Cannon_#4-1794231789624.mp3"
+  ],
+  "kraken": [
+    "Kraken_1.wav",
+    "Kraken_2.wav"
+  ],
+  "activation": [
+    "Lighthouse_Activation_#1-1794232670290.mp3",
+    "Lighthouse_Activation_#3-1794232690692.mp3"
+  ],
+  "warning": [
+    "Low-energy_warning_—_#1-1794231334966.mp3",
+    "Low-energy_warning_—_#3-1794231511416.mp3"
+  ],
+  "rescue": [
+    "Ship_Safety_#2-1794232797597.mp3",
+    "Ship_Safety_#4-1794232813637.mp3"
+  ],
+  "sunk": [
+    "Sunk_Ship_#1-1794233044070.mp3",
+    "Sunk_Ship_#2-1794233067204.mp3"
+  ],
+  "arrival": [
+    "a_ship_approaches.mp3",
+    "Ship_Approach.mp3"
+  ],
+  "crew": [
+    "Crew_Safely_Home.mp3"
+  ],
+  "complete": [
+    "Harbor_Holds.mp3"
+  ],
+  "fading": [
+    "Light_Fading_Recharge.mp3"
+  ],
+  "pirate": [
+    "Pirates_Closing_In.mp3"
+  ]
+}
